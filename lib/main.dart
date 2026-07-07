@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/home/home_page.dart';
 
 void main() {
   runApp(const NoahApp());
@@ -10,14 +11,9 @@ class NoahApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "Noah's Ark",
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        appBar: AppBar(title: const Text("诺亚方舟")),
-        body: const Center(
-          child: Text("欢迎来到诺亚方舟", style: TextStyle(fontSize: 24)),
-        ),
-      ),
+      title: "Noah's Ark",
+      home: const HomePage(),
     );
   }
 }
