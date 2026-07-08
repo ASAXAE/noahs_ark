@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../thinking/thinking_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -27,7 +28,14 @@ class HomePage extends StatelessWidget {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ThinkingPage(),
+                    ),
+                  );
+                },
                 child: const Text("开始记录"),
               ),
             ),
