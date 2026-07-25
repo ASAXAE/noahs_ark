@@ -13,6 +13,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
+  final Set<int> _expandedThoughtIds = {};
   List<Thought> _thoughts = [];
   bool _loading = true;
   bool _favoritesOnly = false;
@@ -83,6 +84,16 @@ class _HomePageState extends State<HomePage> {
     });
 
     _loadThoughts();
+  }
+
+  void _toggleThoughtExpanded(int id) {
+    setState(() {
+      if (_expandedThoughtIds.contains(id)) {
+        _expandedThoughtIds.remove(id);
+      } else {
+        _expandedThoughtIds.add(id);
+      }
+    });
   }
 
   @override
@@ -193,10 +204,10 @@ class _HomePageState extends State<HomePage> {
           hintText: '搜索记录',
           suffixIcon: _hasSearchText
               ? IconButton(
-            tooltip: '清空搜索',
-            onPressed: _clearSearch,
-            icon: const Icon(Icons.close),
-          )
+                  tooltip: '清空搜索',
+                  onPressed: _clearSearch,
+                  icon: const Icon(Icons.close),
+                )
               : null,
         ),
       ),
@@ -257,79 +268,135 @@ class _HomePageState extends State<HomePage> {
     ),
   );
 
-  Widget _thoughtCard(Thought thought) => Card(
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => _openEditor(thought),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 9,
-                          vertical: 4,
+  Widget _thoughtCard(Thought thought) {
+    final id = thought.id;
+    final isExpanded = id != null && _expandedThoughtIds.contains(id);
+
+    final previewContent = thought.content.replaceAll(RegExp(r'\n\s*\n'), '\n');
+
+    final mayOverflow =
+        thought.content.length > 70 ||
+        '\n'.allMatches(thought.content).length >= 2;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openEditor(thought),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.secondaryContainer,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            thought.tag,
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(20),
+
+                        const SizedBox(width: 10),
+
+                        Expanded(
+                          child: Text(
+                            thought.title.isEmpty ? '无标题' : thought.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                        child: Text(
-                          thought.tag,
-                          style: const TextStyle(fontSize: 12),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    Text(
+                      isExpanded ? thought.content : previewContent,
+                      maxLines: isExpanded ? null : 3,
+                      overflow: isExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, height: 1.5),
+                    ),
+
+                    if (mayOverflow && id != null) ...[
+                      const SizedBox(height: 2),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 0,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: () => _toggleThoughtExpanded(id),
+                          child: Text(isExpanded ? '收起' : '显示全文'),
                         ),
                       ),
-                      const Spacer(),
-                      Text(
+                    ],
+                    const SizedBox(height: 8),
+
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
                         thought.formattedDate,
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.outline,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    thought.content,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, height: 1.5),
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'favorite') _toggleFavorite(thought);
-                if (value == 'delete') _delete(thought);
-              },
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  value: 'favorite',
-                  child: Text(thought.isFavorite ? '取消收藏' : '收藏'),
+                    ),
+                  ],
                 ),
-                const PopupMenuItem(value: 'delete', child: Text('删除')),
-              ],
-              icon: Icon(
-                thought.isFavorite ? Icons.favorite : Icons.more_vert,
-                color: thought.isFavorite ? Colors.redAccent : null,
               ),
-            ),
-          ],
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'favorite') {
+                    _toggleFavorite(thought);
+                  }
+
+                  if (value == 'delete') {
+                    _delete(thought);
+                  }
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'favorite',
+                    child: Text(thought.isFavorite ? '取消收藏' : '收藏'),
+                  ),
+                  const PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+                icon: Icon(
+                  thought.isFavorite ? Icons.favorite : Icons.more_vert,
+                  color: thought.isFavorite ? Colors.redAccent : null,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  } // _thoughtCard 在这里结束
 
   @override
   void dispose() {

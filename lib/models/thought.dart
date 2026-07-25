@@ -1,6 +1,7 @@
 class Thought {
   const Thought({
     this.id,
+    required this.title,
     required this.content,
     required this.tag,
     required this.createdAt,
@@ -11,6 +12,7 @@ class Thought {
   static const tags = ['成长', '灵感', '梦想', '生活','学习'];
 
   final int? id;
+  final String title;
   final String content;
   final String tag;
   final DateTime createdAt;
@@ -22,8 +24,9 @@ class Thought {
     return '${createdAt.year}/${two(createdAt.month)}/${two(createdAt.day)} ${two(createdAt.hour)}:${two(createdAt.minute)}';
   }
 
-  Thought copyWith({String? content, String? tag, bool? isFavorite}) => Thought(
+  Thought copyWith({String? title,String? content, String? tag, bool? isFavorite}) => Thought(
     id: id,
+    title: title ?? this.title,
     content: content ?? this.content,
     tag: tag ?? this.tag,
     createdAt: createdAt,
@@ -33,6 +36,7 @@ class Thought {
 
   Map<String, Object?> toMap() => {
     'id': id,
+    'title': title,
     'content': content,
     'tag': tag,
     'created_at': createdAt.toIso8601String(),
@@ -42,6 +46,7 @@ class Thought {
 
   factory Thought.fromMap(Map<String, Object?> map) => Thought(
     id: map['id'] as int,
+    title: map['title'] as String,
     content: map['content'] as String,
     tag: map['tag'] as String,
     createdAt: DateTime.parse(map['created_at'] as String),

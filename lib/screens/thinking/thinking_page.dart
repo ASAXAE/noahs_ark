@@ -14,6 +14,7 @@ class ThinkingPage extends StatefulWidget {
 
 class _ThinkingPageState extends State<ThinkingPage> {
   late final TextEditingController _controller;
+  late final TextEditingController _titleController;
   late String _tag;
   late bool _isFavorite;
   bool _saving = false;
@@ -22,12 +23,32 @@ class _ThinkingPageState extends State<ThinkingPage> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.thought?.content ?? '');
+    _titleController = TextEditingController(
+      text: widget.thought?.title ?? '',
+    );
     _tag = widget.thought?.tag ?? Thought.tags.first;
     _isFavorite = widget.thought?.isFavorite ?? false;
   }
 
+  String _formatParagraphs(String text) {
+    return text
+        .split(RegExp(r'\n\s*\n'))
+        .map((paragraph) {
+      final content = paragraph.trim();
+
+      if (content.isEmpty) {
+        return '';
+      }
+
+      return '\u3000\u3000$content';
+    })
+        .join('\n\n');
+  }
+
   Future<void> _save() async {
-    final content = _controller.text.trim();
+    final content = _formatParagraphs(
+      _controller.text.trim(),
+    );
     if (content.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -39,6 +60,7 @@ class _ThinkingPageState extends State<ThinkingPage> {
     await ArkDatabase.instance.saveThought(
       Thought(
         id: widget.thought?.id,
+        title: _titleController.text.trim(),
         content: content,
         tag: _tag,
         isFavorite: _isFavorite,
@@ -85,6 +107,17 @@ class _ThinkingPageState extends State<ThinkingPage> {
                 style: TextStyle(color: Theme.of(context).colorScheme.outline),
               ),
               const SizedBox(height: 20),
+              TextField(
+                controller: _titleController,
+                maxLength: 50,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  labelText: '标题',
+                  hintText: '给这条记录起一个标题',
+                  prefixIcon: Icon(Icons.title),
+                ),
+              ),
+              const SizedBox(height: 14),
               Expanded(
                 child: TextField(
                   controller: _controller,
@@ -134,6 +167,7 @@ class _ThinkingPageState extends State<ThinkingPage> {
 
   @override
   void dispose() {
+    _titleController.dispose();
     _controller.dispose();
     super.dispose();
   }
