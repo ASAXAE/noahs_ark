@@ -9,7 +9,7 @@ class Thought {
     this.isFavorite = false,
   });
 
-  static const tags = ['成长', '灵感', '梦想', '生活','学习'];
+  static const tags = ['成长', '灵感', '梦想', '生活', '学习'];
 
   final int? id;
   final String title;
@@ -24,7 +24,12 @@ class Thought {
     return '${createdAt.year}/${two(createdAt.month)}/${two(createdAt.day)} ${two(createdAt.hour)}:${two(createdAt.minute)}';
   }
 
-  Thought copyWith({String? title,String? content, String? tag, bool? isFavorite}) => Thought(
+  Thought copyWith({
+    String? title,
+    String? content,
+    String? tag,
+    bool? isFavorite,
+  }) => Thought(
     id: id,
     title: title ?? this.title,
     content: content ?? this.content,

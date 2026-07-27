@@ -23,9 +23,7 @@ class _ThinkingPageState extends State<ThinkingPage> {
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.thought?.content ?? '');
-    _titleController = TextEditingController(
-      text: widget.thought?.title ?? '',
-    );
+    _titleController = TextEditingController(text: widget.thought?.title ?? '');
     _tag = widget.thought?.tag ?? Thought.tags.first;
     _isFavorite = widget.thought?.isFavorite ?? false;
   }
@@ -34,21 +32,19 @@ class _ThinkingPageState extends State<ThinkingPage> {
     return text
         .split(RegExp(r'\n\s*\n'))
         .map((paragraph) {
-      final content = paragraph.trim();
+          final content = paragraph.trim();
 
-      if (content.isEmpty) {
-        return '';
-      }
+          if (content.isEmpty) {
+            return '';
+          }
 
-      return '\u3000\u3000$content';
-    })
+          return '\u3000\u3000$content';
+        })
         .join('\n\n');
   }
 
   Future<void> _save() async {
-    final content = _formatParagraphs(
-      _controller.text.trim(),
-    );
+    final content = _formatParagraphs(_controller.text.trim());
     if (content.isEmpty) {
       ScaffoldMessenger.of(
         context,
