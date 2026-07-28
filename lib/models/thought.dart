@@ -58,4 +58,28 @@ class Thought {
     updatedAt: DateTime.parse(map['updated_at'] as String),
     isFavorite: map['is_favorite'] == 1,
   );
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+      'tag': tag,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+      'isFavorite': isFavorite,
+    };
+  }
+
+  factory Thought.fromJson(Map<String, dynamic> json) {
+    return Thought(
+      id: json['id'] as int?,
+      title: json['title'] as String? ?? '',
+      content: json['content'] as String,
+      tag: json['tag'] as String,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      isFavorite: json['isFavorite'] as bool? ?? false,
+    );
+  }
 }
