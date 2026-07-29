@@ -5,6 +5,7 @@ import '../../models/thought.dart';
 import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
 import '../../widgets/thought_card.dart';
+import '../../services/api_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -88,6 +89,24 @@ class _HomePageState extends State<HomePage> {
     await _loadThoughts();
   }
 
+  Future<void> _testApiConnection() async {
+    try {
+      final title = await ApiService().fetchExampleTitle();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('请求成功: $title')));
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('请求失败: $error')));
+    }
+  }
+
   void _clearSearch() {
     _searchController.clear();
 
@@ -117,6 +136,11 @@ class _HomePageState extends State<HomePage> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(
+            tooltip: '测试网络',
+            onPressed: _testApiConnection,
+            icon: const Icon(Icons.cloud_outlined),
+          ),
           IconButton(
             tooltip: _favoritesOnly ? '显示全部' : '只看收藏',
             onPressed: () {
