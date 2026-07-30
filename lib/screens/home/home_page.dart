@@ -91,13 +91,13 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _testApiConnection() async {
     try {
-      final title = await ApiService().fetchExampleTitle();
+      final message = await ApiService().fetchHealthMessage();
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('请求成功: $title')));
+      ).showSnackBar(SnackBar(content: Text('后端连接成功: $message')));
     } catch (error) {
       if (!mounted) return;
 

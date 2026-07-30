@@ -19,4 +19,19 @@ class ApiService {
 
     return json['title'] as String;
   }
+
+  static const String _localBaseUrl = 'http://10.0.2.2:3000';
+
+  Future<String> fetchHealthMessage() async {
+    final uri = Uri.parse('$_localBaseUrl/health');
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+
+    return json['message'] as String;
+  }
 }
