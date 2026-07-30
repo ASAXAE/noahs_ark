@@ -1,17 +1,32 @@
-# noahs_ark_app
+# Noah's Ark（诺亚方舟）
 
-A new Flutter project.
+一款使用 Flutter 开发的个人思考记录 App。
 
-## Getting Started
+## 已完成功能
 
-This project is a starting point for a Flutter application.
+- 新建、修改和删除记录
+- 使用 SQLite 在手机本地保存记录
+- 标题和标签
+- 搜索与标签筛选
+- 收藏记录
+- 展开和收起长文本
+- Flutter 自动测试
+- Flutter 连接 Express 后端
 
-A few resources to get you started if this is your first Flutter project:
+## 使用的技术
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Flutter
+- Dart
+- SQLite
+- Node.js
+- Express
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 当前进度
+
+目前已经完成本地记录功能，并成功连接到本地 Express 服务器。
+
+下一步计划：学习 Express API，然后连接 PostgreSQL。
+
+## 作者
+
+ASAXAE
