@@ -13,6 +13,8 @@ const thoughts = [
         title: '我的第一条服务器记录',
         content: '这条记录来自 Express。',
         tag: '成长',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         isFavorite: false,
     },
 ];
@@ -33,6 +35,8 @@ app.post('/thoughts', (request, response) => {
         id: thoughts.length + 1,
         title: request.body.title,
         content: request.body.content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         tag: request.body.tag,
         isFavorite: false,
     };

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../models/thought.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -33,5 +34,22 @@ class ApiService {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
 
     return json['message'] as String;
+  }
+
+  Future<List<Thought>> fetchThoughts() async {
+    final uri = Uri.parse('$_localBaseUrl/thoughts');
+
+    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final jsonList =
+        jsonDecode(utf8.decode(response.bodyBytes)) as List<dynamic>;
+
+    return jsonList
+        .map((json) => Thought.fromJson(json as Map<String, dynamic>))
+        .toList();
   }
 }

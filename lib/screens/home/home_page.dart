@@ -91,19 +91,19 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _testApiConnection() async {
     try {
-      final message = await ApiService().fetchHealthMessage();
+      final serverThoughts = await ApiService().fetchThoughts();
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('后端连接成功: $message')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('服务器共有 ${serverThoughts.length} 条记录')),
+      );
     } catch (error) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('请求失败: $error')));
+      ).showSnackBar(SnackBar(content: Text('获取服务器记录失败：$error')));
     }
   }
 
