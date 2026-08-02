@@ -95,8 +95,50 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('服务器共有 ${serverThoughts.length} 条记录')),
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                children: [
+                  Text(
+                    '服务器记录',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 16),
+
+                  Expanded(
+                    child: serverThoughts.isEmpty
+                        ? const Center(
+                      child: Text('服务器还没有记录'),
+                    )
+                        : ListView.separated(
+                      itemCount: serverThoughts.length,
+                      separatorBuilder: (_, _) =>
+                      const Divider(),
+                      itemBuilder: (_, index) {
+                        final thought = serverThoughts[index];
+
+                        return ListTile(
+                          title: Text(
+                            thought.title.isEmpty
+                                ? '无标题'
+                                : thought.title,
+                          ),
+                          subtitle: Text(thought.content),
+                          trailing: Text(thought.tag),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       );
     } catch (error) {
       if (!mounted) return;
