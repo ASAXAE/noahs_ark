@@ -52,4 +52,31 @@ class ApiService {
         .map((json) => Thought.fromJson(json as Map<String, dynamic>))
         .toList();
   }
+
+  Future<Thought> createTestThought() async {
+    final uri = Uri.parse('$_localBaseUrl/thoughts');
+
+    final requestBody = jsonEncode({
+      'title': 'Day 16 API 测试',
+      'content': '这是一条由 Flutter 创建的服务器测试记录',
+      'tag': '学习',
+    });
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: requestBody,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 201) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    return Thought.fromJson(json);
+  }
 }

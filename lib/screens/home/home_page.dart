@@ -104,34 +104,40 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: Column(
                 children: [
-                  Text(
-                    '服务器记录',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                  Text('服务器记录', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 16),
 
                   Expanded(
                     child: serverThoughts.isEmpty
-                        ? const Center(
-                      child: Text('服务器还没有记录'),
-                    )
+                        ? const Center(child: Text('服务器还没有记录'))
                         : ListView.separated(
-                      itemCount: serverThoughts.length,
-                      separatorBuilder: (_, _) =>
-                      const Divider(),
-                      itemBuilder: (_, index) {
-                        final thought = serverThoughts[index];
+                            itemCount: serverThoughts.length,
+                            separatorBuilder: (_, _) => const Divider(),
+                            itemBuilder: (_, index) {
+                              final thought = serverThoughts[index];
 
-                        return ListTile(
-                          title: Text(
-                            thought.title.isEmpty
-                                ? '无标题'
-                                : thought.title,
+                              return ListTile(
+                                title: Text(
+                                  thought.title.isEmpty ? '无标题' : thought.title,
+                                ),
+                                subtitle: Text(thought.content),
+                                trailing: Text(thought.tag),
+                              );
+                            },
                           ),
-                          subtitle: Text(thought.content),
-                          trailing: Text(thought.tag),
-                        );
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _createServerTestThought();
                       },
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: const Text('创建服务器测试记录'),
                     ),
                   ),
                 ],
@@ -146,6 +152,24 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('获取服务器记录失败：$error')));
+    }
+  }
+
+  Future<void> _createServerTestThought() async {
+    try {
+      final createdThought = await ApiService().createTestThought();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('服务器记录创建成功：${createdThought.title}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('创建服务器记录失败：$error')));
     }
   }
 
