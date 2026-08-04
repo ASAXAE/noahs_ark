@@ -1,6 +1,8 @@
 const express = require('express');
 require('dotenv').config();
 
+const pool = require('./database');
+
 const app = express();
 
 const port = process.env.PORT || 3000;
@@ -28,6 +30,26 @@ app.get('/health', (request, response) => {
 
 app.get('/thoughts', (request, response) => {
     response.json(thoughts);
+});
+
+app.get('/database-health', async (request, response) => {
+    try {
+        const result = await pool.query(
+            'SELECT NOW() AS current_time',
+        );
+
+        response.json({
+            status: 'ok',
+            databaseTime: result.rows[0].current_time,
+        });
+    } catch (error) {
+        console.error('Database connection failed:', error.message);
+
+        response.status(500).json({
+            status: 'error',
+            message: 'Database connection failed',
+        });
+    }
 });
 
 app.post('/thoughts', (request, response) => {
