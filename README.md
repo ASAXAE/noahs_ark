@@ -12,7 +12,7 @@
 - 展开和收起长文本
 - Flutter 自动测试
 - Flutter 连接 Express 后端
-- Flutter 链接 PostgreSQL 后端
+- Flutter 连接 PostgreSQL 后端
 
 ## 使用的技术
 
