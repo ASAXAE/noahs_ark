@@ -12,6 +12,7 @@
 - 展开和收起长文本
 - Flutter 自动测试
 - Flutter 连接 Express 后端
+- Flutter 链接 PostgreSQL 后端
 
 ## 使用的技术
 
@@ -20,12 +21,13 @@
 - SQLite
 - Node.js
 - Express
+- PostgreSQL
 
 ## 当前进度
 
-目前已经完成本地记录功能，并成功连接到本地 Express 服务器。
+目前已经完成本地记录功能，并成功连接到本地 Express 服务器和PostgreSQL。
 
-下一步计划：学习 Express API，然后连接 PostgreSQL。
+下一步计划：内存数组 thoughts  替换 PostgreSQL thoughts 表。
 
 ## 作者
 
