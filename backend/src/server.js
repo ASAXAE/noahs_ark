@@ -9,18 +9,6 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 
-const thoughts = [
-    {
-        id: 1,
-        title: '我的第一条服务器记录',
-        content: '这条记录来自 Express。',
-        tag: '成长',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isFavorite: false,
-    },
-];
-
 app.get('/health', (request, response) => {
     response.json({
         status: 'ok',
@@ -28,8 +16,33 @@ app.get('/health', (request, response) => {
     });
 });
 
-app.get('/thoughts', (request, response) => {
-    response.json(thoughts);
+app.get('/thoughts', async (request, response) => {
+    try {
+        const result = await pool.query(
+            `
+                SELECT
+                    id,
+                    title,
+                    content,
+                    tag,
+                    is_favorite AS "isFavorite",
+                    created_at AS "createdAt",
+                    updated_at AS "updatedAt"
+                FROM thoughts
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+            `,
+            [1],
+        );
+
+        response.json(result.rows);
+    } catch (error) {
+        console.error('Failed to fetch thoughts:', error.message);
+
+        response.status(500).json({
+            message: 'Failed to fetch thoughts',
+        });
+    }
 });
 
 app.get('/database-health', async (request, response) => {
@@ -52,20 +65,44 @@ app.get('/database-health', async (request, response) => {
     }
 });
 
-app.post('/thoughts', (request, response) => {
-    const newThought = {
-        id: thoughts.length + 1,
-        title: request.body.title,
-        content: request.body.content,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        tag: request.body.tag,
-        isFavorite: false,
-    };
+app.post('/thoughts', async (request, response) => {
+    try {
+        const result = await pool.query(
+            `
+                INSERT INTO thoughts (
+                    user_id,
+                    title,
+                    content,
+                    tag,
+                    is_favorite
+                )
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING
+                    id,
+                    title,
+                    content,
+                    tag,
+                    is_favorite AS "isFavorite",
+                    created_at AS "createdAt",
+                    updated_at AS "updatedAt"
+            `,
+            [
+                1,
+                request.body.title,
+                request.body.content,
+                request.body.tag,
+                false,
+            ],
+        );
 
-    thoughts.push(newThought);
+        response.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Failed to create thought:', error.message);
 
-    response.status(201).json(newThought);
+        response.status(500).json({
+            message: 'Failed to create thought',
+        });
+    }
 });
 
 app.listen(port, '0.0.0.0', () => {

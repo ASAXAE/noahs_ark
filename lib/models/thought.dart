@@ -72,8 +72,14 @@ class Thought {
   }
 
   factory Thought.fromJson(Map<String, dynamic> json) {
+    final idValue = json['id'];
+
+    final parsedId = idValue is int
+        ? idValue
+        : int.tryParse(idValue.toString());
+
     return Thought(
-      id: json['id'] as int?,
+      id: parsedId,
       title: json['title'] as String? ?? '',
       content: json['content'] as String,
       tag: json['tag'] as String,
