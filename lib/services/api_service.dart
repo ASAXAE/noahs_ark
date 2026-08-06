@@ -79,4 +79,16 @@ class ApiService {
 
     return Thought.fromJson(json);
   }
+
+  Future<void> deleteThought(int id) async {
+    final uri = Uri.parse('$_localBaseUrl/thoughts/$id');
+
+    final response = await http
+        .delete(uri)
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 204) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+  }
 }

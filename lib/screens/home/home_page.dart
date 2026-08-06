@@ -121,7 +121,20 @@ class _HomePageState extends State<HomePage> {
                                   thought.title.isEmpty ? '无标题' : thought.title,
                                 ),
                                 subtitle: Text(thought.content),
-                                trailing: Text(thought.tag),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(thought.tag),
+                                    IconButton(
+                                      tooltip: '删除服务器记录',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _deleteServerThought(thought);
+                                      },
+                                    ),
+                                  ],
+                                ),
                               );
                             },
                           ),
@@ -170,6 +183,60 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('创建服务器记录失败：$error')));
+    }
+  }
+
+  Future<void> _deleteServerThought(Thought thought) async {
+    final id = thought.id;
+
+    if (id == null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('删除服务器记录？'),
+          content: Text(
+            '确定删除“${thought.title.isEmpty ? '无标题' : thought.title}”吗？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ApiService().deleteThought(id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('服务器记录已删除')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除服务器记录失败：$error')));
     }
   }
 
