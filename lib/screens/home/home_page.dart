@@ -126,6 +126,13 @@ class _HomePageState extends State<HomePage> {
                                   children: [
                                     Text(thought.tag),
                                     IconButton(
+                                      tooltip: '编辑服务器记录',
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () {
+                                        _editServerThought(thought);
+                                      },
+                                    ),
+                                    IconButton(
                                       tooltip: '删除服务器记录',
                                       icon: const Icon(Icons.delete_outline),
                                       onPressed: () {
@@ -183,6 +190,126 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('创建服务器记录失败：$error')));
+    }
+  }
+
+  Future<void> _editServerThought(Thought thought) async {
+    var editedTitle = thought.title;
+    var editedContent = thought.content;
+    var editedTag = thought.tag;
+    String? validationMessage;
+
+    final updatedThought = await showDialog<Thought>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('编辑服务器记录'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      initialValue: thought.title,
+                      onChanged: (value) {
+                        editedTitle = value;
+                      },
+                      decoration: const InputDecoration(
+                        labelText: '标题',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: thought.content,
+                      onChanged: (value) {
+                        editedContent = value;
+                      },
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: '正文',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: thought.tag,
+                      onChanged: (value) {
+                        editedTag = value;
+                      },
+                      decoration: const InputDecoration(
+                        labelText: '标签',
+                      ),
+                    ),
+                    if (validationMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        validationMessage!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (editedContent.trim().isEmpty ||
+                        editedTag.trim().isEmpty) {
+                      setDialogState(() {
+                        validationMessage = '正文和标签不能为空';
+                      });
+                      return;
+                    }
+
+                    Navigator.pop(
+                      dialogContext,
+                      thought.copyWith(
+                        title: editedTitle.trim(),
+                        content: editedContent.trim(),
+                        tag: editedTag.trim(),
+                      ),
+                    );
+                  },
+                  child: const Text('保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (updatedThought == null) {
+      return;
+    }
+
+    try {
+      final result = await ApiService().updateThought(updatedThought);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('服务器记录修改成功：${result.title}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('修改服务器记录失败：$error'),
+        ),
+      );
     }
   }
 

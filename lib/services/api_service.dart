@@ -21,7 +21,7 @@ class ApiService {
     return json['title'] as String;
   }
 
-  static const String _localBaseUrl = 'http://10.0.2.2:3000';
+  static const String _localBaseUrl = 'http://127.0.0.1:3000';
 
   Future<String> fetchHealthMessage() async {
     final uri = Uri.parse('$_localBaseUrl/health');
@@ -71,6 +71,40 @@ class ApiService {
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 201) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    return Thought.fromJson(json);
+  }
+
+  Future<Thought> updateThought(Thought thought) async {
+    final id = thought.id;
+
+    if (id == null) {
+      throw ArgumentError('Thought id cannot be null');
+    }
+
+    final uri = Uri.parse('$_localBaseUrl/thoughts/$id');
+
+    final requestBody = jsonEncode({
+      'title': thought.title,
+      'content': thought.content,
+      'tag': thought.tag,
+      'isFavorite': thought.isFavorite,
+    });
+
+    final response = await http
+        .patch(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: requestBody,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
     }
 

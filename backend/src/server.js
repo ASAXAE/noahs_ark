@@ -2,56 +2,15 @@ const express = require('express');
 require('dotenv').config();
 
 const pool = require('./database');
+const {
+    validateThoughtInput,
+} = require('./thought_validation');
 
 const app = express();
 
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
-
-function validateThoughtInput(body = {}) {
-    const title =
-        typeof body.title === 'string'
-            ? body.title.trim()
-            : '';
-
-    const content =
-        typeof body.content === 'string'
-            ? body.content
-            : '';
-
-    const tag =
-        typeof body.tag === 'string'
-            ? body.tag.trim()
-            : '';
-
-    const errors = [];
-
-    if (title.length > 50) {
-        errors.push('title must not exceed 50 characters');
-    }
-
-    if (content.trim().length === 0) {
-        errors.push('content is required');
-    }
-
-    if (tag.length === 0) {
-        errors.push('tag is required');
-    }
-
-    if (tag.length > 20) {
-        errors.push('tag must not exceed 20 characters');
-    }
-
-    return {
-        errors,
-        value: {
-            title,
-            content,
-            tag,
-        },
-    };
-}
 
 app.get('/health', (request, response) => {
     response.json({
@@ -156,6 +115,88 @@ app.post('/thoughts', async (request, response) => {
 
         response.status(500).json({
             message: 'Failed to create thought',
+        });
+    }
+});
+
+app.patch('/thoughts/:id', async (request, response) => {
+    const thoughtId = request.params.id;
+    const { title, content, tag, isFavorite = false } = request.body;
+
+    if(!/^[1-9]\d*$/.test(thoughtId)) {
+        return response.status(400).json({
+            message: 'Invalid thought id',
+        });
+    }
+
+    const errors = [];
+
+    if (typeof title !== 'string') {
+        errors.push('title must be a string');
+    }
+
+    if (typeof content !== 'string' || content.trim().length === 0) {
+        errors.push('content is required');
+    }
+
+    if (typeof tag !== 'string' || tag.trim().length === 0) {
+        errors.push('tag is required');
+    }
+
+    if (typeof isFavorite !== 'boolean') {
+        errors.push('isFavorite must be a boolean');
+    }
+
+    if (errors.length > 0) {
+        return response.status(400).json({
+            message: 'Invalid thought data',
+            errors,
+        });
+    }
+
+    try {
+        const result = await pool.query(
+        `
+            UPDATE thoughts
+            SET
+                title = $1,
+                content = $2,
+                tag = $3,
+                is_favorite = $4,
+                updated_at = NOW()
+            WHERE id = $5
+                AND user_id = $6
+            RETURNING
+                id,
+                title,
+                content,
+                tag,
+                is_favorite AS "isFavorite",
+                created_at AS "createdAt",
+                updated_at AS "updatedAt"
+            `,
+            [
+                title.trim(),
+                content.trim(),
+                tag.trim(),
+                isFavorite,
+                thoughtId,
+                1,
+            ],
+        );
+
+        if (result.rows.length === 0) {
+            return response.status(404).json({
+                message: 'Thought not found',
+            });
+        }
+
+        return response.json(result.rows[0]);
+    } catch (error) {
+        console.error('Failed to update thought:', error);
+
+        return response.status(500).json({
+            message: 'Failed to update thought',
         });
     }
 });

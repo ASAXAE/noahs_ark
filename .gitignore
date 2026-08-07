@@ -50,3 +50,5 @@ app.*.map.json
 !.env.example
 
 backend/node_modules/
+
+application_materials/
