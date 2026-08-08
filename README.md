@@ -98,6 +98,9 @@ backend/
 │   └── thought_validation.js
 └── test/
     └── thought_validation.test.js
+
+scripts/
+└── start_android_dev.ps1   Android development environment helper
 ```
 
 ## API
@@ -200,6 +203,20 @@ http://127.0.0.1:3000
 ```
 
 ADB reverse may need to be run again after restarting the emulator.
+
+The included development helper checks the emulator, configures ADB reverse,
+checks the Express health endpoint and starts Express in a separate terminal
+when required:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_android_dev.ps1
+```
+
+The Flutter API URL can be overridden at build time:
+
+```powershell
+flutter run --dart-define=API_BASE_URL=http://127.0.0.1:3000
+```
 
 ## Verification / 验证
 

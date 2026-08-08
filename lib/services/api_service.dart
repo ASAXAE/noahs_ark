@@ -21,7 +21,10 @@ class ApiService {
     return json['title'] as String;
   }
 
-  static const String _localBaseUrl = 'http://127.0.0.1:3000';
+  static const String _localBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:3000',
+  );
 
   Future<String> fetchHealthMessage() async {
     final uri = Uri.parse('$_localBaseUrl/health');
