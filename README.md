@@ -89,6 +89,8 @@ test/
 └── models/         Flutter model tests
 
 backend/
+├── integration/
+│   └── thought_api.integration.test.js
 ├── sql/
 │   ├── 001_create_users.sql
 │   └── 002_create_thoughts.sql
@@ -235,9 +237,13 @@ cd backend
 node --check src/server.js
 node --check src/database.js
 npm test
+npm run test:integration
 ```
 
 On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
+The integration test requires the Express server and PostgreSQL database to be
+running. It creates, reads, updates and deletes a temporary record, then cleans
+up that record.
 
 ## Privacy and security
 
@@ -263,7 +269,7 @@ On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
 
 - Replace the fixed test user with authentication and authorization
 - Separate server test UI from the home page
-- Add API integration tests
+- Expand API integration coverage for authentication and authorization
 - Add local export and restore for the offline V1
 - Design an opt-in, privacy-preserving sync model
 - Add CI checks for Flutter and backend tests

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/thought_validation.test.js",
+    "test:integration": "node --test integration/thought_api.integration.test.js"
   },
   "keywords": [],
   "author": "",
