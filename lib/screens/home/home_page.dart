@@ -6,6 +6,7 @@ import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
 import '../../widgets/thought_card.dart';
 import '../../services/api_service.dart';
+import '../../services/backup_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -66,27 +67,151 @@ class _HomePageState extends State<HomePage> {
     await _loadThoughts();
   }
 
+  Future<void> _exportBackup() async {
+    try {
+      final thoughts = await ArkDatabase.instance.getThoughts();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (thoughts.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('还没有可以导出的记录')));
+        return;
+      }
+
+      await BackupService().exportThoughts(thoughts);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出失败：$error')));
+    }
+  }
+
+  Future<void> _previewBackup() async {
+    try {
+      final backup = await BackupService().pickAndReadBackup();
+
+      if (backup == null || !mounted) {
+        return;
+      }
+
+      final localExportTime = backup.exportedAt.toLocal();
+      final displayTime = localExportTime.toString().split('.').first;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('备份文件验证成功'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('记录数量：${backup.thoughts.length}'),
+                const SizedBox(height: 8),
+                Text('导出时间：$displayTime'),
+                const SizedBox(height: 16),
+                const Text(
+                  '当前只检查文件，还没有把记录写入本地数据库。',
+                ),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('知道了'),
+              ),
+            ],
+          );
+        },
+      );
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('备份验证失败：${error.message}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('读取备份失败：$error'),
+        ),
+      );
+    }
+  }
+
   Future<void> _delete(Thought thought) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除这条记录？'),
-        content: const Text('删除后无法恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        final title = thought.title.trim().isEmpty
+            ? '无标题'
+            : thought.title.trim();
+
+        return AlertDialog(
+          title: const Text('删除这条记录？'),
+          content: Text('确定删除“$title”吗？删除后无法恢复。'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
     );
-    if (confirmed != true || thought.id == null) return;
-    await ArkDatabase.instance.deleteThought(thought.id!);
-    await _loadThoughts();
+
+    final id = thought.id;
+
+    if (confirmed != true || id == null) {
+      return;
+    }
+
+    try {
+      await ArkDatabase.instance.deleteThought(id);
+      await _loadThoughts();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('记录已删除')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除失败：$error')));
+    }
   }
 
   Future<void> _testApiConnection() async {
@@ -215,9 +340,7 @@ class _HomePageState extends State<HomePage> {
                       onChanged: (value) {
                         editedTitle = value;
                       },
-                      decoration: const InputDecoration(
-                        labelText: '标题',
-                      ),
+                      decoration: const InputDecoration(labelText: '标题'),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -237,9 +360,7 @@ class _HomePageState extends State<HomePage> {
                       onChanged: (value) {
                         editedTag = value;
                       },
-                      decoration: const InputDecoration(
-                        labelText: '标签',
-                      ),
+                      decoration: const InputDecoration(labelText: '标签'),
                     ),
                     if (validationMessage != null) ...[
                       const SizedBox(height: 12),
@@ -297,19 +418,15 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('服务器记录修改成功：${result.title}'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('服务器记录修改成功：${result.title}')));
     } catch (error) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('修改服务器记录失败：$error'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('修改服务器记录失败：$error')));
     }
   }
 
@@ -367,6 +484,24 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  bool get _hasActiveFilters {
+    return _searchController.text.trim().isNotEmpty ||
+        _selectedTag != null ||
+        _favoritesOnly;
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+
+    setState(() {
+      _hasSearchText = false;
+      _selectedTag = null;
+      _favoritesOnly = false;
+    });
+
+    _loadThoughts();
+  }
+
   void _clearSearch() {
     _searchController.clear();
 
@@ -396,6 +531,16 @@ class _HomePageState extends State<HomePage> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(
+            tooltip: '检查备份文件',
+            onPressed: _previewBackup,
+            icon: const Icon(Icons.file_download_outlined),
+          ),
+          IconButton(
+            tooltip: '导出本地记录',
+            onPressed: _exportBackup,
+            icon: const Icon(Icons.file_upload_outlined),
+          ),
           IconButton(
             tooltip: '测试网络',
             onPressed: _testApiConnection,
@@ -555,31 +700,65 @@ class _HomePageState extends State<HomePage> {
     ],
   );
 
-  Widget _emptyState() => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.auto_stories_outlined,
-            size: 64,
-            color: Theme.of(context).colorScheme.outline,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _searchController.text.isEmpty ? '方舟还是空的' : '没有找到相关记录',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '写下此刻值得保存的想法',
-            style: TextStyle(color: Theme.of(context).colorScheme.outline),
-          ),
-        ],
+  Widget _emptyState() {
+    String title;
+    String description;
+    IconData icon;
+
+    if (_searchController.text.trim().isNotEmpty) {
+      title = '没有找到相关记录';
+      description = '试试修改搜索内容';
+      icon = Icons.search_off_outlined;
+    } else if (_selectedTag != null) {
+      title = '“$_selectedTag”标签还没有记录';
+      description = '你可以写下一条属于这个标签的想法';
+      icon = Icons.label_outline;
+    } else if (_favoritesOnly) {
+      title = '还没有收藏记录';
+      description = '收藏重要的想法后，它们会出现在这里';
+      icon = Icons.favorite_border;
+    } else {
+      title = '方舟还是空的';
+      description = '写下此刻值得保存的想法';
+      icon = Icons.auto_stories_outlined;
+    }
+
+    final hasActiveFilters = _hasActiveFilters;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: hasActiveFilters ? _resetFilters : _openEditor,
+              icon: Icon(
+                hasActiveFilters
+                    ? Icons.filter_alt_off_outlined
+                    : Icons.edit_outlined,
+              ),
+              label: Text(hasActiveFilters ? '查看全部记录' : '写下第一条记录'),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   @override
   void dispose() {

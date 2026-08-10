@@ -52,3 +52,6 @@ app.*.map.json
 backend/node_modules/
 
 application_materials/
+
+# Android generated build files
+/android/build/
