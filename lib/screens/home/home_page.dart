@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../database/ark_database.dart';
 import '../../models/thought.dart';
@@ -7,6 +8,7 @@ import '../detail/thought_detail_page.dart';
 import '../../widgets/thought_card.dart';
 import '../../services/api_service.dart';
 import '../../services/backup_service.dart';
+import '../settings/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -41,6 +43,19 @@ class _HomePageState extends State<HomePage> {
       _thoughts = thoughts;
       _loading = false;
     });
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(
+          onExportBackup: _exportBackup,
+          onRestoreBackup: _previewBackup,
+        ),
+      ),
+    );
+
+    await _loadThoughts();
   }
 
   Future<void> _openEditor([Thought? thought]) async {
@@ -105,7 +120,7 @@ class _HomePageState extends State<HomePage> {
       final localExportTime = backup.exportedAt.toLocal();
       final displayTime = localExportTime.toString().split('.').first;
 
-      await showDialog<void>(
+      final shouldRestore = await showDialog<bool>(
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
@@ -118,42 +133,65 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 8),
                 Text('导出时间：$displayTime'),
                 const SizedBox(height: 16),
-                const Text(
-                  '当前只检查文件，还没有把记录写入本地数据库。',
-                ),
+                const Text('恢复不会删除现有记录，已经存在的相同记录会被跳过。'),
               ],
             ),
             actions: [
-              FilledButton(
+              TextButton(
                 onPressed: () {
-                  Navigator.pop(dialogContext);
+                  Navigator.pop(dialogContext, false);
                 },
-                child: const Text('知道了'),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: backup.thoughts.isEmpty
+                    ? null
+                    : () {
+                        Navigator.pop(dialogContext, true);
+                      },
+                child: const Text('恢复记录'),
               ),
             ],
           );
         },
+      );
+
+      if (shouldRestore != true) {
+        return;
+      }
+
+      final result = await ArkDatabase.instance.importThoughts(backup.thoughts);
+
+      await _loadThoughts();
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '恢复完成：新增 ${result.importedCount} 条，'
+            '跳过 ${result.skippedCount} 条',
+          ),
+        ),
       );
     } on FormatException catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('备份验证失败：${error.message}'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('备份验证失败：${error.message}')));
     } catch (error) {
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('读取备份失败：$error'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('恢复备份失败：$error')));
     }
   }
 
@@ -532,20 +570,16 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
-            tooltip: '检查备份文件',
-            onPressed: _previewBackup,
-            icon: const Icon(Icons.file_download_outlined),
+            tooltip: '设置',
+            onPressed: _openSettings,
+            icon: const Icon(Icons.settings_outlined),
           ),
-          IconButton(
-            tooltip: '导出本地记录',
-            onPressed: _exportBackup,
-            icon: const Icon(Icons.file_upload_outlined),
-          ),
-          IconButton(
-            tooltip: '测试网络',
-            onPressed: _testApiConnection,
-            icon: const Icon(Icons.cloud_outlined),
-          ),
+          if (kDebugMode)
+            IconButton(
+              tooltip: '测试后端连接',
+              onPressed: _testApiConnection,
+              icon: const Icon(Icons.cloud_outlined),
+            ),
           IconButton(
             tooltip: _favoritesOnly ? '显示全部' : '只看收藏',
             onPressed: () {

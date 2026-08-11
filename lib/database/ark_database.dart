@@ -1,7 +1,19 @@
+import 'dart:convert';
+
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/thought.dart';
+
+class BackupImportResult {
+  const BackupImportResult({
+    required this.importedCount,
+    required this.skippedCount,
+  });
+
+  final int importedCount;
+  final int skippedCount;
+}
 
 class ArkDatabase {
   ArkDatabase._();
@@ -84,5 +96,51 @@ class ArkDatabase {
   Future<void> deleteThought(int id) async {
     final db = await database;
     await db.delete('thoughts', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<BackupImportResult> importThoughts(List<Thought> thoughts) async {
+    final db = await database;
+
+    return db.transaction((transaction) async {
+      final existingRows = await transaction.query('thoughts');
+
+      final existingFingerprints = existingRows
+          .map(Thought.fromMap)
+          .map(_thoughtFingerprint)
+          .toSet();
+
+      var importedCount = 0;
+      var skippedCount = 0;
+
+      for (final thought in thoughts) {
+        final fingerprint = _thoughtFingerprint(thought);
+
+        if (existingFingerprints.contains(fingerprint)) {
+          skippedCount++;
+          continue;
+        }
+
+        final values = thought.toMap()..remove('id');
+
+        await transaction.insert('thoughts', values);
+
+        existingFingerprints.add(fingerprint);
+        importedCount++;
+      }
+
+      return BackupImportResult(
+        importedCount: importedCount,
+        skippedCount: skippedCount,
+      );
+    });
+  }
+
+  String _thoughtFingerprint(Thought thought) {
+    return jsonEncode([
+      thought.title,
+      thought.content,
+      thought.tag,
+      thought.createdAt.toIso8601String(),
+    ]);
   }
 }
