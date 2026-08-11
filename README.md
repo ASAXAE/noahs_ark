@@ -7,8 +7,9 @@ Express and PostgreSQL backend.
 SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证客户端与服务器
 之间的完整 CRUD 数据链路。
 
-> Status: actively developed. The backend currently uses a fixed test user and
-> is not a production-ready sync service.
+> Status: V1 release preparation. The offline app is functional, while the
+> backend still uses a fixed test user and is not a production-ready sync
+> service.
 
 ## Features / 已完成功能
 
@@ -20,7 +21,12 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Search and tag filtering
 - Expandable long-text previews
 - Reusable `ThoughtCard` widget
-- JSON serialization and model tests
+- Empty states for an empty ark and filtered search results
+- Local JSON backup export through the system share sheet
+- Validated JSON backup restore into SQLite
+- Merge-style restore that preserves existing data and skips duplicate records
+- Settings and in-app local-first privacy information
+- JSON serialization, backup parsing and model tests
 
 ### Experimental backend
 
@@ -35,6 +41,7 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - `users` and `thoughts` tables connected by a foreign key
 - SQL migration files for reproducible database setup
 - Database health endpoint
+- Debug-only backend connection entry in the Flutter app
 
 ## Architecture / 架构
 
@@ -43,6 +50,20 @@ Local records
 
 Flutter UI
     ↓
+ArkDatabase
+    ↓
+SQLite
+
+SQLite
+    ↓ export
+BackupService
+    ↓
+JSON backup file
+
+JSON backup file
+    ↓ validate
+BackupService
+    ↓ transaction + duplicate check
 ArkDatabase
     ↓
 SQLite
@@ -86,7 +107,8 @@ lib/
 └── widgets/        Reusable UI components
 
 test/
-└── models/         Flutter model tests
+├── models/         Flutter model tests
+└── services/       Backup parsing tests
 
 backend/
 ├── integration/
@@ -149,7 +171,10 @@ flutter pub get
 flutter run
 ```
 
-### 2. Configure the backend
+The offline V1 works without starting Express or PostgreSQL. The backend steps
+below are only required for the experimental server-record workflow.
+
+### 2. Configure the optional backend
 
 Create `backend/.env` from `backend/.env.example`:
 
@@ -248,7 +273,14 @@ up that record.
 ## Privacy and security
 
 - Offline records are stored locally in SQLite by default.
+- Records are not automatically uploaded to the experimental backend.
+- Backup files are created only when the user explicitly exports them.
+- Restore validates backup format version and record count before writing.
+- Restore merges data without deleting existing records and skips matching
+  duplicates.
+- Exported JSON can contain private journal content and should be stored safely.
 - The current backend contains test data only.
+- The Flutter backend-test button is visible only in debug builds.
 - `.env` and database passwords are excluded from Git.
 - The API uses parameterized SQL queries.
 - Production cloud sync will require authentication, HTTPS, per-user
@@ -264,15 +296,17 @@ up that record.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
+- V1 uses a fixed set of tags; custom tag management is not implemented yet.
 
 ## Roadmap
 
-- Replace the fixed test user with authentication and authorization
-- Separate server test UI from the home page
-- Expand API integration coverage for authentication and authorization
-- Add local export and restore for the offline V1
-- Design an opt-in, privacy-preserving sync model
+- Complete V1 smoke testing and release-device verification
+- Finalize app metadata, icon and release packaging
+- Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
+- Replace the fixed test user with authentication and authorization
+- Design an opt-in, privacy-preserving sync model
+- Containerize the experimental backend when deployment work begins
 
 ## Author
 
