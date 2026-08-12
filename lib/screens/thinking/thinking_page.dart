@@ -4,9 +4,10 @@ import '../../database/ark_database.dart';
 import '../../models/thought.dart';
 
 class ThinkingPage extends StatefulWidget {
-  const ThinkingPage({super.key, this.thought});
+  const ThinkingPage({super.key, this.thought, this.initialTag});
 
   final Thought? thought;
+  final String? initialTag;
 
   @override
   State<ThinkingPage> createState() => _ThinkingPageState();
@@ -24,7 +25,11 @@ class _ThinkingPageState extends State<ThinkingPage> {
     super.initState();
     _controller = TextEditingController(text: widget.thought?.content ?? '');
     _titleController = TextEditingController(text: widget.thought?.title ?? '');
-    _tag = widget.thought?.tag ?? Thought.tags.first;
+    final requestedTag = widget.thought?.tag ?? widget.initialTag;
+
+    _tag = requestedTag != null && Thought.tags.contains(requestedTag)
+        ? requestedTag
+        : Thought.tags.first;
     _isFavorite = widget.thought?.isFavorite ?? false;
   }
 
@@ -102,18 +107,46 @@ class _ThinkingPageState extends State<ThinkingPage> {
                 '不用完美，只要真实。',
                 style: TextStyle(color: Theme.of(context).colorScheme.outline),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 7),
               TextField(
                 controller: _titleController,
                 maxLength: 50,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: '标题',
                   hintText: '给这条记录起一个标题',
                   prefixIcon: Icon(Icons.title),
                 ),
               ),
-              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: Thought.tags.map((tag) {
+                  final selected = _tag == tag;
+
+                  return ChoiceChip(
+                    label: Text(tag),
+                    selected: selected,
+                    showCheckmark: false,
+                    shape: const StadiumBorder(),
+                    side: BorderSide(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                    selectedColor: Theme.of(
+                      context,
+                    ).colorScheme.secondaryContainer,
+                    onSelected: (_) {
+                      setState(() {
+                        _tag = tag;
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 7),
+
               Expanded(
                 child: TextField(
                   controller: _controller,
@@ -125,20 +158,7 @@ class _ThinkingPageState extends State<ThinkingPage> {
                   decoration: const InputDecoration(hintText: '写下今天的想法…'),
                 ),
               ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                initialValue: _tag,
-                decoration: const InputDecoration(
-                  labelText: '标签',
-                  prefixIcon: Icon(Icons.sell_outlined),
-                ),
-                items: Thought.tags
-                    .map(
-                      (tag) => DropdownMenuItem(value: tag, child: Text(tag)),
-                    )
-                    .toList(),
-                onChanged: (value) => setState(() => _tag = value ?? _tag),
-              ),
+
               const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,

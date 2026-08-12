@@ -60,7 +60,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openEditor([Thought? thought]) async {
     final changed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(builder: (_) => ThinkingPage(thought: thought)),
+      MaterialPageRoute(
+        builder: (_) => ThinkingPage(
+          thought: thought,
+          initialTag: thought == null ? _selectedTag : null,
+        ),
+      ),
     );
     if (changed == true) await _loadThoughts();
   }
@@ -686,7 +691,7 @@ class _HomePageState extends State<HomePage> {
         controller: _searchController,
         onChanged: (value) {
           setState(() {
-            _hasSearchText = value.isNotEmpty;
+            _hasSearchText = value.trim().isNotEmpty;
           });
 
           _loadThoughts();
