@@ -1,4 +1,4 @@
-package com.kaipeng.noahs_ark_app
+package io.github.asaxae.noahsark
 
 import io.flutter.embedding.android.FlutterActivity
 import android.view.KeyEvent

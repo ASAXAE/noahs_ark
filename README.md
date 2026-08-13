@@ -7,6 +7,10 @@ Express and PostgreSQL backend.
 SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证客户端与服务器
 之间的完整 CRUD 数据链路。
 
+<p align="center">
+  <img src="assets/branding/noahs_ark_app_icon.png" alt="Noah's Ark app icon" width="160" />
+</p>
+
 > Status: V1 release preparation. The offline app is functional, while the
 > backend still uses a fixed test user and is not a production-ready sync
 > service.
@@ -26,6 +30,7 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Validated JSON backup restore into SQLite
 - Merge-style restore that preserves existing data and skips duplicate records
 - Settings and in-app local-first privacy information
+- Branded Android adaptive launcher icon
 - JSON serialization, backup parsing and model tests
 
 ### Experimental backend
@@ -96,6 +101,22 @@ the Express API.
 - Flutter Test
 - Node.js Test Runner
 
+## Android app identity
+
+| Field | Value |
+|---|---|
+| App name | Noah's Ark（诺亚方舟） |
+| Application ID | `io.github.asaxae.noahsark` |
+| Current version | `1.0.0+1` |
+
+The Android launcher icon uses separate background and foreground layers so it
+can adapt to the device's circular or rounded-square icon mask. Editable brand
+assets are kept in `assets/branding/`.
+
+Changing the application ID makes Android treat the build as a different app.
+Local SQLite data from builds using the previous ID is therefore not moved
+automatically; export a JSON backup before uninstalling an older build.
+
 ## Project structure
 
 ```text
@@ -125,6 +146,9 @@ backend/
 
 scripts/
 └── start_android_dev.ps1   Android development environment helper
+
+assets/
+└── branding/               App icon source and transparent foreground
 ```
 
 ## API
@@ -253,6 +277,7 @@ Flutter:
 dart format lib test
 flutter analyze
 flutter test
+flutter build apk --debug
 ```
 
 Backend:
@@ -301,7 +326,7 @@ up that record.
 ## Roadmap
 
 - Complete V1 smoke testing and release-device verification
-- Finalize app metadata, icon and release packaging
+- Configure Android release signing and produce a release build
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
 - Replace the fixed test user with authentication and authorization

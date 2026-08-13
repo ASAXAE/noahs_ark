@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.kaipeng.noahs_ark_app"
+    namespace = "io.github.asaxae.noahsark"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.kaipeng.noahs_ark_app"
+        applicationId = "io.github.asaxae.noahsark"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
