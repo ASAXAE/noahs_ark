@@ -55,3 +55,8 @@ application_materials/
 
 # Android generated build files
 /android/build/
+
+# Android release signing secrets
+/android/key.properties
+*.jks
+*.keystore

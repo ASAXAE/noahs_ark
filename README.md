@@ -280,6 +280,20 @@ flutter test
 flutter build apk --debug
 ```
 
+Android release artifacts:
+
+```bash
+flutter build apk --release
+flutter build apk --release --split-per-abi
+flutter build appbundle --release
+```
+
+Release builds use a private upload key configured through
+`android/key.properties`. That file and Android keystore files are excluded
+from Git and must be created locally. Never commit signing passwords or private
+keys. The current signed universal APK is produced at
+`build/app/outputs/flutter-apk/app-release.apk`.
+
 Backend:
 
 ```bash
@@ -326,7 +340,7 @@ up that record.
 ## Roadmap
 
 - Complete V1 smoke testing and release-device verification
-- Configure Android release signing and produce a release build
+- Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
 - Replace the fixed test user with authentication and authorization
