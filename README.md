@@ -11,7 +11,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   <img src="assets/branding/noahs_ark_app_icon.png" alt="Noah's Ark app icon" width="160" />
 </p>
 
-> Status: V1 release preparation. The offline app is functional, while the
+> Status: V1 release candidate. The offline app is functional and the signed
+> Android APK has passed local smoke testing, while the
 > backend still uses a fixed test user and is not a production-ready sync
 > service.
 
@@ -25,6 +26,7 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Search and tag filtering
 - Expandable long-text previews
 - Reusable `ThoughtCard` widget
+- Rounded card action menu for editing, favoriting and deleting records
 - Empty states for an empty ark and filtered search results
 - Local JSON backup export through the system share sheet
 - Validated JSON backup restore into SQLite
@@ -294,6 +296,17 @@ from Git and must be created locally. Never commit signing passwords or private
 keys. The current signed universal APK is produced at
 `build/app/outputs/flutter-apk/app-release.apk`.
 
+### Release smoke test
+
+The signed universal APK was installed and tested on a clean Pixel 9 Pro
+Android 17 / API 37 emulator using a 16 KB page-size system image. The verified
+flow includes first launch, SQLite creation, create/edit/favorite/search/filter,
+app restart persistence, APK update persistence, JSON backup export, backup
+validation and merge-style restore. Re-importing the same backup correctly
+skips duplicate records. External delivery from the Android share sheet, such
+as Gmail delivery, depends on the selected app, account and network and is not
+part of backup-file validation.
+
 Backend:
 
 ```bash
@@ -339,7 +352,7 @@ up that record.
 
 ## Roadmap
 
-- Complete V1 smoke testing and release-device verification
+- Test the release candidate on a physical Android device
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests

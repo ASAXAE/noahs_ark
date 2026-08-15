@@ -9,6 +9,7 @@ class ThoughtCard extends StatelessWidget {
     required this.isExpanded,
     required this.onTap,
     required this.onToggleExpanded,
+    required this.onEdit,
     required this.onFavorite,
     required this.onDelete,
   });
@@ -18,6 +19,7 @@ class ThoughtCard extends StatelessWidget {
 
   final VoidCallback onTap;
   final VoidCallback onToggleExpanded;
+  final VoidCallback onEdit;
   final VoidCallback onFavorite;
   final VoidCallback onDelete;
 
@@ -136,7 +138,17 @@ class ThoughtCard extends StatelessWidget {
                 ),
 
               PopupMenuButton<String>(
+                color: Theme.of(context).cardColor,
+                elevation: 10,
+                offset: const Offset(-8, 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
                 onSelected: (value) {
+                  if (value == 'edit') {
+                    onEdit();
+                  }
+
                   if (value == 'favorite') {
                     onFavorite();
                   }
@@ -146,11 +158,54 @@ class ThoughtCard extends StatelessWidget {
                   }
                 },
                 itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    height: 46,
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 20),
+                        SizedBox(width: 12),
+                        Text('编辑'),
+                      ],
+                    ),
+                  ),
                   PopupMenuItem(
                     value: 'favorite',
-                    child: Text(thought.isFavorite ? '取消收藏' : '收藏'),
+                    height: 46,
+                    child: Row(
+                      children: [
+                        Icon(
+                          thought.isFavorite
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 20,
+                          color: thought.isFavorite ? Colors.redAccent : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(thought.isFavorite ? '取消' : '收藏'),
+                      ],
+                    ),
                   ),
-                  const PopupMenuItem(value: 'delete', child: Text('删除')),
+                  PopupMenuItem(
+                    value: 'delete',
+                    height: 46,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '删除',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
                 icon: const Icon(Icons.more_vert),
               ),

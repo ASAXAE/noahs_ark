@@ -638,6 +638,7 @@ class _HomePageState extends State<HomePage> {
                             _toggleThoughtExpanded(id);
                           }
                         },
+                        onEdit: () => _openEditor(thought),
                         onFavorite: () => _toggleFavorite(thought),
                         onDelete: () => _delete(thought),
                       );
