@@ -47,6 +47,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Request validation with automated Node.js tests
 - `users` and `thoughts` tables connected by a foreign key
 - SQL migration files for reproducible database setup
+- Experimental `POST /auth/register` user-registration endpoint
+- Password hashing with `bcryptjs`; plain-text passwords are never stored
+- Duplicate-email protection and registration integration tests
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
 
@@ -99,6 +102,7 @@ the Express API.
 - Node.js
 - Express
 - PostgreSQL (`pg`)
+- Password hashing (`bcryptjs`)
 - HTTP / JSON
 - Flutter Test
 - Node.js Test Runner
@@ -135,15 +139,19 @@ test/
 
 backend/
 ├── integration/
+│   ├── auth_api.integration.test.js
 │   └── thought_api.integration.test.js
 ├── sql/
 │   ├── 001_create_users.sql
-│   └── 002_create_thoughts.sql
+│   ├── 002_create_thoughts.sql
+│   └── 003_add_password_hash.sql
 ├── src/
+│   ├── auth_validation.js
 │   ├── database.js
 │   ├── server.js
 │   └── thought_validation.js
 └── test/
+    ├── auth_validation.test.js
     └── thought_validation.test.js
 
 scripts/
@@ -159,6 +167,7 @@ assets/
 |---|---|---|
 | `GET` | `/health` | Check whether Express is running |
 | `GET` | `/database-health` | Check the PostgreSQL connection |
+| `POST` | `/auth/register` | Validate and register a backend test user |
 | `GET` | `/thoughts` | Fetch server-side test records |
 | `POST` | `/thoughts` | Create a server-side test record |
 | `PATCH` | `/thoughts/:id` | Update a server-side test record |
@@ -180,6 +189,19 @@ Successful deletion returns:
 ```text
 204 No Content
 ```
+
+Example registration request body:
+
+```json
+{
+  "displayName": "Day 30 User",
+  "email": "day30@example.com",
+  "password": "example-password"
+}
+```
+
+The registration response contains only the new user's safe public fields. It
+does not return the password or password hash.
 
 ## Local setup
 
@@ -222,6 +244,7 @@ Run these commands from the `backend` directory:
 ```bash
 psql -U postgres -h localhost -d noahs_ark -f sql/001_create_users.sql
 psql -U postgres -h localhost -d noahs_ark -f sql/002_create_thoughts.sql
+psql -U postgres -h localhost -d noahs_ark -f sql/003_add_password_hash.sql
 ```
 
 The current learning version expects a test user with `id = 1`.
@@ -318,9 +341,10 @@ npm run test:integration
 ```
 
 On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
-The integration test requires the Express server and PostgreSQL database to be
-running. It creates, reads, updates and deletes a temporary record, then cleans
-up that record.
+The integration tests require the Express server and PostgreSQL database to be
+running. They verify the Thought API CRUD flow and the registration flow,
+including input rejection, password hashing and duplicate-email protection.
+Temporary records and users created by the tests are removed afterward.
 
 ## Privacy and security
 
@@ -335,6 +359,8 @@ up that record.
 - The Flutter backend-test button is visible only in debug builds.
 - `.env` and database passwords are excluded from Git.
 - The API uses parameterized SQL queries.
+- Registration passwords are validated and stored only as `bcrypt` hashes.
+- Registration responses never include a password or password hash.
 - Production cloud sync will require authentication, HTTPS, per-user
   authorization, account deletion, secure secret management and a privacy
   policy.
@@ -344,7 +370,8 @@ up that record.
 ## Current limitations
 
 - Server requests currently operate as a fixed test user (`user_id = 1`).
-- Authentication and account management are not implemented.
+- Backend registration is implemented for learning and testing, but login,
+  tokens or sessions, account deletion and per-user authorization are not.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -356,7 +383,8 @@ up that record.
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
-- Replace the fixed test user with authentication and authorization
+- Add login and token authentication, then replace the fixed test user with
+  per-user authorization
 - Design an opt-in, privacy-preserving sync model
 - Containerize the experimental backend when deployment work begins
 

@@ -1,10 +1,17 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
+
 require('dotenv').config();
 
 const pool = require('./database');
+
 const {
     validateThoughtInput,
 } = require('./thought_validation');
+
+const {
+    validateRegistrationInput,
+} = require('./auth_validation');
 
 const app = express();
 
@@ -17,6 +24,62 @@ app.get('/health', (request, response) => {
         status: 'ok',
         message: "Noah's Ark API is running",
     });
+});
+
+app.post('/auth/register', async (request, response) => {
+    const validation = validateRegistrationInput(request.body);
+
+    if (validation.errors.length > 0) {
+        return response.status(400).json({
+            message: 'Invalid registration data',
+            errors: validation.errors,
+        });
+    }
+
+    const {
+        displayName,
+        email,
+        password,
+    } = validation.value;
+
+    try {
+        const passwordHash = await bcrypt.hash(password, 12);
+
+        const result = await pool.query(
+            `
+                INSERT INTO users (
+                    display_name,
+                    email,
+                    password_hash
+                )
+                VALUES ($1, $2, $3)
+                RETURNING
+                    id,
+                    display_name AS "displayName",
+                    email,
+                    created_at AS "createdAt"
+            `,
+            [
+                displayName,
+                email,
+                passwordHash,
+            ],
+        );
+
+        return response.status(201).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') {
+            return response.status(409).json({
+                message: 'Email is already registered',
+            });
+        }
+
+        console.error('Failed to register user:', error.message);
+
+        return response.status(500).json({
+            message: 'Failed to register user',
+        });
+    }
 });
 
 app.get('/thoughts', async (request, response) => {

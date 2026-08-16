@@ -31,6 +31,10 @@ class ThoughtCard extends StatelessWidget {
         thought.content.length > 70 ||
         '\n'.allMatches(thought.content).length >= 2;
 
+    // Only the overflow menu owns a vertical action lane. The favorite icon
+    // belongs to the header row and must not reduce the body width.
+    const trailingMenuWidth = 32.0;
+
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -76,138 +80,164 @@ class ThoughtCard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
+
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: Center(
+                            child: thought.isFavorite
+                                ? const Icon(
+                                    Icons.favorite,
+                                    color: Colors.redAccent,
+                                    size: 20,
+                                  )
+                                : null,
+                          ),
+                        ),
+
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            iconSize: 22,
+                            color: Theme.of(context).cardColor,
+                            elevation: 10,
+                            offset: const Offset(-8, 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                onEdit();
+                              }
+
+                              if (value == 'favorite') {
+                                onFavorite();
+                              }
+
+                              if (value == 'delete') {
+                                onDelete();
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                height: 46,
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 20),
+                                    SizedBox(width: 12),
+                                    Text('编辑'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'favorite',
+                                height: 46,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      thought.isFavorite
+                                          ? Icons.favorite
+                                          : Icons.favorite_border,
+                                      size: 20,
+                                      color: thought.isFavorite
+                                          ? Colors.redAccent
+                                          : null,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(thought.isFavorite ? '取消' : '收藏'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                height: 46,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      '删除',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            icon: const Icon(Icons.more_vert),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
 
-                    Text(
-                      isExpanded ? thought.content : previewContent,
-                      maxLines: isExpanded ? null : 3,
-                      overflow: isExpanded
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, height: 1.5),
-                    ),
-
-                    if (mayOverflow) ...[
-                      const SizedBox(height: 2),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 0,
-                            ),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: onToggleExpanded,
-                          child: Text(isExpanded ? '收起' : '显示全文'),
-                        ),
+                    Padding(
+                      // Leave room only for the overflow menu, not the heart.
+                      padding: const EdgeInsets.only(
+                        right: trailingMenuWidth,
                       ),
-                    ],
-                    const SizedBox(height: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isExpanded ? thought.content : previewContent,
+                            maxLines: isExpanded ? null : 3,
+                            overflow: isExpanded
+                                ? TextOverflow.visible
+                                : TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 16, height: 1.5),
+                          ),
 
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        thought.formattedDate,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
+                          if (mayOverflow) ...[
+                            const SizedBox(height: 2),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 0,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                                onPressed: onToggleExpanded,
+                                child: Text(isExpanded ? '收起' : '显示全文'),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 8),
+
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              thought.formattedDate,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
-
-              if (thought.isFavorite)
-                const SizedBox(
-                  width: 15,
-                  height: 48,
-                  child: Center(
-                    child: Icon(
-                      Icons.favorite,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                  ),
-                ),
-
-              PopupMenuButton<String>(
-                color: Theme.of(context).cardColor,
-                elevation: 10,
-                offset: const Offset(-8, 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    onEdit();
-                  }
-
-                  if (value == 'favorite') {
-                    onFavorite();
-                  }
-
-                  if (value == 'delete') {
-                    onDelete();
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    height: 46,
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 20),
-                        SizedBox(width: 12),
-                        Text('编辑'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'favorite',
-                    height: 46,
-                    child: Row(
-                      children: [
-                        Icon(
-                          thought.isFavorite
-                              ? Icons.favorite
-                              : Icons.favorite_border,
-                          size: 20,
-                          color: thought.isFavorite ? Colors.redAccent : null,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(thought.isFavorite ? '取消' : '收藏'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    height: 46,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.delete_outline,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          '删除',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                icon: const Icon(Icons.more_vert),
               ),
             ],
           ),

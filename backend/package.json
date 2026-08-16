@@ -4,14 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/thought_validation.test.js",
-    "test:integration": "node --test integration/thought_api.integration.test.js"
+    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js",
+    "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pg": "^8.22.0"
