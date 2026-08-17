@@ -117,6 +117,7 @@ describe('Auth API', () => {
             );
         }
     });
+
     test('rejects invalid registration data', async () => {
         const response = await fetch(
             `${baseUrl}/auth/register`,
@@ -160,5 +161,121 @@ describe('Auth API', () => {
                 'password must contain at least 8 characters',
             ),
         );
+    });
+
+    test('logs in a registered user and rejects invalid credentials', async () => {
+        const email =
+            `login-${Date.now()}@example.com`;
+
+        const password = 'LoginTest123!';
+
+        try {
+            const registerResponse = await fetch(
+                `${baseUrl}/auth/register`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json; charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        displayName: 'Login Test User',
+                        email,
+                        password,
+                    }),
+                },
+            );
+
+            assert.equal(registerResponse.status, 201);
+
+            const loginResponse = await fetch(
+                `${baseUrl}/auth/login`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json; charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password,
+                    }),
+                },
+            );
+
+            assert.equal(loginResponse.status, 200);
+
+            const loggedInUser = await loginResponse.json();
+
+            assert.equal(
+                loggedInUser.displayName,
+                'Login Test User',
+            );
+
+            assert.equal(loggedInUser.email, email);
+            assert.equal(loggedInUser.password, undefined);
+            assert.equal(
+                loggedInUser.passwordHash,
+                undefined,
+            );
+
+            const wrongPasswordResponse = await fetch(
+                `${baseUrl}/auth/login`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json; charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        password: 'WrongPassword!',
+                    }),
+                },
+            );
+
+            assert.equal(wrongPasswordResponse.status, 401);
+
+            const wrongPasswordBody =
+                await wrongPasswordResponse.json();
+
+            assert.equal(
+                wrongPasswordBody.message,
+                'Invalid email or password',
+            );
+
+            const unknownEmailResponse = await fetch(
+                `${baseUrl}/auth/login`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type':
+                            'application/json; charset=utf-8',
+                    },
+                    body: JSON.stringify({
+                        email: 'unknown@example.com',
+                        password,
+                    }),
+                },
+            );
+
+            assert.equal(unknownEmailResponse.status, 401);
+
+            const unknownEmailBody =
+                await unknownEmailResponse.json();
+
+            assert.equal(
+                unknownEmailBody.message,
+                'Invalid email or password',
+            );
+        } finally {
+            await pool.query(
+                `
+                    DELETE FROM users
+                    WHERE email = $1
+                `,
+                [email],
+            );
+        }
     });
 });

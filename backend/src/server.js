@@ -11,6 +11,7 @@ const {
 
 const {
     validateRegistrationInput,
+    validateLoginInput,
 } = require('./auth_validation');
 
 const app = express();
@@ -78,6 +79,73 @@ app.post('/auth/register', async (request, response) => {
 
         return response.status(500).json({
             message: 'Failed to register user',
+        });
+    }
+});
+
+app.post('/auth/login', async (request, response) => {
+    const validation = validateLoginInput(request.body);
+
+    if (validation.errors.length > 0) {
+        return response.status(400).json({
+            message: 'Invalid login data',
+            errors: validation.errors,
+        });
+    }
+
+    const {
+        email,
+        password,
+    } = validation.value;
+
+    try {
+        const result = await pool.query(
+            `
+                SELECT
+                    id,
+                    display_name AS "displayName",
+                    email,
+                    password_hash AS "passwordHash",
+                    created_at AS "createdAt"
+                FROM users
+                WHERE email = $1
+            `,
+            [email],
+        );
+
+        const user = result.rows[0];
+
+        if (
+            user === undefined ||
+            typeof user.passwordHash !== 'string'
+        ) {
+            return response.status(401).json({
+                message: 'Invalid email or password',
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(
+            password,
+            user.passwordHash,
+        );
+
+        if (!passwordMatches) {
+            return response.status(401).json({
+                message: 'Invalid email or password',
+            });
+        }
+
+        return response.status(200).json({
+            id: user.id,
+            displayName: user.displayName,
+            email: user.email,
+            createdAt: user.createdAt,
+        });
+    } catch (error) {
+        console.error('Failed to log in user:', error.message);
+
+        return response.status(500).json({
+            message: 'Failed to log in user',
         });
     }
 });

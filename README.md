@@ -47,9 +47,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Request validation with automated Node.js tests
 - `users` and `thoughts` tables connected by a foreign key
 - SQL migration files for reproducible database setup
-- Experimental `POST /auth/register` user-registration endpoint
+- Experimental `POST /auth/register` and `POST /auth/login` endpoints
 - Password hashing with `bcryptjs`; plain-text passwords are never stored
-- Duplicate-email protection and registration integration tests
+- Duplicate-email protection, credential verification and authentication tests
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
 
@@ -168,6 +168,7 @@ assets/
 | `GET` | `/health` | Check whether Express is running |
 | `GET` | `/database-health` | Check the PostgreSQL connection |
 | `POST` | `/auth/register` | Validate and register a backend test user |
+| `POST` | `/auth/login` | Verify a backend test user's email and password |
 | `GET` | `/thoughts` | Fetch server-side test records |
 | `POST` | `/thoughts` | Create a server-side test record |
 | `PATCH` | `/thoughts/:id` | Update a server-side test record |
@@ -202,6 +203,18 @@ Example registration request body:
 
 The registration response contains only the new user's safe public fields. It
 does not return the password or password hash.
+
+Example login request body:
+
+```json
+{
+  "email": "day30@example.com",
+  "password": "example-password"
+}
+```
+
+The current login endpoint verifies credentials and returns safe user fields.
+It does not issue a token or create a persistent session yet.
 
 ## Local setup
 
@@ -342,9 +355,10 @@ npm run test:integration
 
 On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
 The integration tests require the Express server and PostgreSQL database to be
-running. They verify the Thought API CRUD flow and the registration flow,
-including input rejection, password hashing and duplicate-email protection.
-Temporary records and users created by the tests are removed afterward.
+running. They verify the Thought API CRUD flow plus registration and login,
+including input rejection, password hashing, duplicate-email protection,
+successful login and generic rejection of invalid credentials. Temporary
+records and users created by the tests are removed afterward.
 
 ## Privacy and security
 
@@ -360,7 +374,8 @@ Temporary records and users created by the tests are removed afterward.
 - `.env` and database passwords are excluded from Git.
 - The API uses parameterized SQL queries.
 - Registration passwords are validated and stored only as `bcrypt` hashes.
-- Registration responses never include a password or password hash.
+- Authentication responses never include a password or password hash.
+- Incorrect passwords and unknown emails receive the same generic login error.
 - Production cloud sync will require authentication, HTTPS, per-user
   authorization, account deletion, secure secret management and a privacy
   policy.
@@ -370,8 +385,9 @@ Temporary records and users created by the tests are removed afterward.
 ## Current limitations
 
 - Server requests currently operate as a fixed test user (`user_id = 1`).
-- Backend registration is implemented for learning and testing, but login,
-  tokens or sessions, account deletion and per-user authorization are not.
+- Backend registration and credential verification are implemented for
+  learning and testing, but tokens or sessions, account deletion and per-user
+  authorization are not.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -383,8 +399,8 @@ Temporary records and users created by the tests are removed afterward.
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
-- Add login and token authentication, then replace the fixed test user with
-  per-user authorization
+- Add token authentication, then replace the fixed test user with per-user
+  authorization
 - Design an opt-in, privacy-preserving sync model
 - Containerize the experimental backend when deployment work begins
 

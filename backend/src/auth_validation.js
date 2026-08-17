@@ -59,6 +59,52 @@ function validateRegistrationInput(body = {}) {
     };
 }
 
+function validateLoginInput(body = {}) {
+    const input =
+        body !== null && typeof body === 'object'
+            ? body
+            : {};
+
+    const email =
+        typeof input.email === 'string'
+            ? input.email.trim().toLowerCase()
+            : '';
+
+    const password =
+        typeof input.password === 'string'
+            ? input.password
+            : '';
+
+    const errors = [];
+
+    if (email.length === 0) {
+        errors.push('email is required');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errors.push('email is invalid');
+    }
+
+    if (email.length > 255) {
+        errors.push('email must not exceed 255 characters');
+    }
+
+    if (password.length === 0) {
+        errors.push('password is required');
+    }
+
+    if (password.length > 72) {
+        errors.push('password must not exceed 72 characters');
+    }
+
+    return {
+        errors,
+        value: {
+            email,
+            password,
+        },
+    };
+}
+
 module.exports = {
     validateRegistrationInput,
+    validateLoginInput,
 };

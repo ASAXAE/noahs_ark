@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     validateRegistrationInput,
+    validateLoginInput,
 } = require('../src/auth_validation');
 
 describe('validateRegistrationInput', () => {
@@ -55,5 +56,50 @@ describe('validateRegistrationInput', () => {
         assert.deepEqual(result.errors, [
             'displayName is required',
         ]);
+    });
+});
+
+describe('validateLoginInput', () => {
+    test('accepts valid login data and normalizes email', () => {
+        const result = validateLoginInput({
+            email: '  TEST@EXAMPLE.COM  ',
+            password: 'password123',
+        });
+
+        assert.deepEqual(result.errors, []);
+
+        assert.deepEqual(result.value, {
+            email: 'test@example.com',
+            password: 'password123',
+        });
+    });
+
+    test('rejects a missing email and password', () => {
+        const result = validateLoginInput({});
+
+        assert.deepEqual(result.errors, [
+            'email is required',
+            'password is required',
+        ]);
+    });
+
+    test('rejects an invalid login email', () => {
+        const result = validateLoginInput({
+            email: 'invalid-email',
+            password: 'password123',
+        });
+
+        assert.deepEqual(result.errors, [
+            'email is invalid',
+        ]);
+    });
+
+    test('allows a non-empty short password to reach authentication', () => {
+        const result = validateLoginInput({
+            email: 'test@example.com',
+            password: 'wrong',
+        });
+
+        assert.deepEqual(result.errors, []);
     });
 });
