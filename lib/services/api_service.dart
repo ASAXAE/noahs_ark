@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../models/auth_user.dart';
 import '../models/thought.dart';
 
 import 'package:http/http.dart' as http;
@@ -127,5 +128,35 @@ class ApiService {
     if (response.statusCode != 204) {
       throw Exception('HTTP ${response.statusCode}');
     }
+  }
+
+  Future<AuthUser> login({
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/login');
+
+    final requestBody = jsonEncode({
+      'email': email.trim(),
+      'password': password,
+    });
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: requestBody,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 200) {
+      final message = json['message'] as String? ?? '登录失败';
+      throw Exception(message);
+    }
+
+    return AuthUser.fromJson(json);
   }
 }

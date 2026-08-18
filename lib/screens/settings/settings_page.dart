@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../models/auth_user.dart';
+import '../auth/login_page.dart';
 import 'local_first_info_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -18,6 +21,33 @@ class SettingsPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
+          Text('账户与服务', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: const Text('登录'),
+              subtitle: const Text('可选功能，不登录也能继续使用本地记录'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () async {
+                final user = await Navigator.of(context).push<AuthUser>(
+                  MaterialPageRoute<AuthUser>(
+                    builder: (_) => const LoginPage(),
+                  ),
+                );
+
+                if (!context.mounted || user == null) {
+                  return;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('登录成功，欢迎回来：${user.displayName}')),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
           Text('数据管理', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Card(

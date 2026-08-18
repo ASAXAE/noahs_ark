@@ -186,9 +186,7 @@ class ThoughtCard extends StatelessWidget {
 
                     Padding(
                       // Leave room only for the overflow menu, not the heart.
-                      padding: const EdgeInsets.only(
-                        right: trailingMenuWidth,
-                      ),
+                      padding: const EdgeInsets.only(right: trailingMenuWidth),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
