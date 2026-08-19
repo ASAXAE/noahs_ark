@@ -9,6 +9,7 @@ import '../../widgets/thought_card.dart';
 import '../../services/api_service.dart';
 import '../../services/backup_service.dart';
 import '../settings/settings_page.dart';
+import '../../models/auth_user.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,6 +20,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
+  final ValueNotifier<AuthUser?> _authUserNotifier = ValueNotifier<AuthUser?>(
+    null,
+  );
   final Set<int> _expandedThoughtIds = {};
   List<Thought> _thoughts = [];
   bool _loading = true;
@@ -49,6 +53,7 @@ class _HomePageState extends State<HomePage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => SettingsPage(
+          authUserNotifier: _authUserNotifier,
           onExportBackup: _exportBackup,
           onRestoreBackup: _previewBackup,
         ),
@@ -803,6 +808,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _authUserNotifier.dispose();
     super.dispose();
   }
 }
