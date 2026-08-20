@@ -32,6 +32,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Validated JSON backup restore into SQLite
 - Merge-style restore that preserves existing data and skips duplicate records
 - Settings and in-app local-first privacy information
+- Optional backend login without blocking local-only use
+- JWT access tokens stored with Flutter secure storage
+- Login restoration after an app restart and explicit logout
 - Branded Android adaptive launcher icon
 - JSON serialization, backup parsing and model tests
 
@@ -49,6 +52,7 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - SQL migration files for reproducible database setup
 - Experimental `POST /auth/register` and `POST /auth/login` endpoints
 - Password hashing with `bcryptjs`; plain-text passwords are never stored
+- Signed JWT access tokens and protected `GET /auth/me`
 - Duplicate-email protection, credential verification and authentication tests
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
@@ -103,6 +107,8 @@ the Express API.
 - Express
 - PostgreSQL (`pg`)
 - Password hashing (`bcryptjs`)
+- Token authentication (`jsonwebtoken`)
+- Secure client token storage (`flutter_secure_storage`)
 - HTTP / JSON
 - Flutter Test
 - Node.js Test Runner
@@ -128,9 +134,9 @@ automatically; export a JSON backup before uninstalling an older build.
 ```text
 lib/
 ├── database/       SQLite access
-├── models/         Domain models and serialization
+├── models/         Domain models, auth session and serialization
 ├── screens/        App pages
-├── services/       HTTP services
+├── services/       HTTP, backup and secure session storage
 └── widgets/        Reusable UI components
 
 test/
@@ -146,6 +152,8 @@ backend/
 │   ├── 002_create_thoughts.sql
 │   └── 003_add_password_hash.sql
 ├── src/
+│   ├── auth_middleware.js
+│   ├── auth_token.js
 │   ├── auth_validation.js
 │   ├── database.js
 │   ├── server.js
@@ -168,7 +176,8 @@ assets/
 | `GET` | `/health` | Check whether Express is running |
 | `GET` | `/database-health` | Check the PostgreSQL connection |
 | `POST` | `/auth/register` | Validate and register a backend test user |
-| `POST` | `/auth/login` | Verify a backend test user's email and password |
+| `POST` | `/auth/login` | Verify credentials and issue a JWT access token |
+| `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
 | `GET` | `/thoughts` | Fetch server-side test records |
 | `POST` | `/thoughts` | Create a server-side test record |
 | `PATCH` | `/thoughts/:id` | Update a server-side test record |
@@ -213,8 +222,11 @@ Example login request body:
 }
 ```
 
-The current login endpoint verifies credentials and returns safe user fields.
-It does not issue a token or create a persistent session yet.
+The login endpoint returns a signed JWT access token plus safe user fields. The
+Flutter app verifies the token through `/auth/me`, stores it with secure
+platform storage and restores the optional account session after an app
+restart. Logging out deletes the stored token. Local SQLite records remain
+available whether or not the user is logged in.
 
 ## Local setup
 
@@ -246,6 +258,8 @@ DB_PORT=5432
 DB_NAME=noahs_ark
 DB_USER=postgres
 DB_PASSWORD=your_postgresql_password
+JWT_SECRET=replace_with_a_long_random_secret
+JWT_EXPIRES_IN=1h
 ```
 
 Secrets in `backend/.env` are ignored by Git.
@@ -349,16 +363,19 @@ Backend:
 cd backend
 node --check src/server.js
 node --check src/database.js
+node --check src/auth_token.js
+node --check src/auth_middleware.js
 npm test
 npm run test:integration
 ```
 
 On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
 The integration tests require the Express server and PostgreSQL database to be
-running. They verify the Thought API CRUD flow plus registration and login,
-including input rejection, password hashing, duplicate-email protection,
-successful login and generic rejection of invalid credentials. Temporary
-records and users created by the tests are removed afterward.
+running. They verify the Thought API CRUD flow plus registration, login, JWT
+issuance, authenticated `/auth/me` access and rejection of missing or invalid
+tokens. They also cover input rejection, password hashing, duplicate-email
+protection and generic rejection of invalid credentials. Temporary records and
+users created by the tests are removed afterward.
 
 ## Privacy and security
 
@@ -376,6 +393,11 @@ records and users created by the tests are removed afterward.
 - Registration passwords are validated and stored only as `bcrypt` hashes.
 - Authentication responses never include a password or password hash.
 - Incorrect passwords and unknown emails receive the same generic login error.
+- JWT signing secrets stay in the ignored backend `.env` file.
+- Flutter stores the access token with secure platform storage rather than
+  SQLite or plain-text preferences.
+- Logging out deletes the locally stored access token without deleting journal
+  records.
 - Production cloud sync will require authentication, HTTPS, per-user
   authorization, account deletion, secure secret management and a privacy
   policy.
@@ -385,9 +407,10 @@ records and users created by the tests are removed afterward.
 ## Current limitations
 
 - Server requests currently operate as a fixed test user (`user_id = 1`).
-- Backend registration and credential verification are implemented for
-  learning and testing, but tokens or sessions, account deletion and per-user
-  authorization are not.
+- Registration, login, JWT verification and current-user lookup are implemented
+  for learning and testing, but the Thought API is not yet scoped to the
+  authenticated user.
+- Account deletion, refresh tokens and email verification are not implemented.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -399,8 +422,9 @@ records and users created by the tests are removed afterward.
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
-- Add token authentication, then replace the fixed test user with per-user
-  authorization
+- Protect the Thought API with JWT middleware and replace the fixed test user
+  with per-user authorization
+- Add registration UI, email verification and account lifecycle features
 - Design an opt-in, privacy-preserving sync model
 - Containerize the experimental backend when deployment work begins
 

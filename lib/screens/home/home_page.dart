@@ -9,7 +9,8 @@ import '../../widgets/thought_card.dart';
 import '../../services/api_service.dart';
 import '../../services/backup_service.dart';
 import '../settings/settings_page.dart';
-import '../../models/auth_user.dart';
+import '../../models/auth_session.dart';
+import '../../services/auth_session_storage.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,9 +21,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
-  final ValueNotifier<AuthUser?> _authUserNotifier = ValueNotifier<AuthUser?>(
-    null,
-  );
+  final ValueNotifier<AuthSession?> _authSessionNotifier =
+      ValueNotifier<AuthSession?>(null);
+
   final Set<int> _expandedThoughtIds = {};
   List<Thought> _thoughts = [];
   bool _loading = true;
@@ -34,6 +35,30 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _loadThoughts();
+    _restoreAuthSession();
+  }
+
+  Future<void> _restoreAuthSession() async {
+    try {
+      final accessToken = await AuthSessionStorage.instance.readAccessToken();
+
+      if (accessToken == null || accessToken.isEmpty) {
+        return;
+      }
+
+      final user = await ApiService().fetchCurrentUser(
+        accessToken: accessToken,
+      );
+
+      if (!mounted) return;
+
+      _authSessionNotifier.value = AuthSession(
+        accessToken: accessToken,
+        user: user,
+      );
+    } catch (error) {
+      debugPrint('恢复登录状态失败：$error');
+    }
   }
 
   Future<void> _loadThoughts() async {
@@ -53,7 +78,7 @@ class _HomePageState extends State<HomePage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => SettingsPage(
-          authUserNotifier: _authUserNotifier,
+          authSessionNotifier: _authSessionNotifier,
           onExportBackup: _exportBackup,
           onRestoreBackup: _previewBackup,
         ),
@@ -808,7 +833,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _searchController.dispose();
-    _authUserNotifier.dispose();
+    _authSessionNotifier.dispose();
     super.dispose();
   }
 }

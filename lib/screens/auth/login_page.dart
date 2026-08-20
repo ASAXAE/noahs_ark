@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
+import '../../models/auth_session.dart';
+import '../../services/auth_session_storage.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -27,10 +29,25 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final user = await ApiService().login(
+      final apiService = ApiService();
+
+      final loginSession = await apiService.login(
         email: _emailController.text,
         password: _passwordController.text,
       );
+
+      final currentUser = await apiService.fetchCurrentUser(
+        accessToken: loginSession.accessToken,
+      );
+
+      final session = AuthSession(
+        accessToken: loginSession.accessToken,
+        user: currentUser,
+      );
+
+      if (!mounted) return;
+
+      await AuthSessionStorage.instance.saveAccessToken(session.accessToken);
 
       if (!mounted) return;
 
@@ -38,7 +55,7 @@ class _LoginPageState extends State<LoginPage> {
         _isSubmitting = false;
       });
 
-      Navigator.of(context).pop(user);
+      Navigator.of(context).pop(session);
     } catch (error) {
       if (!mounted) return;
 

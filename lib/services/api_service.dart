@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../models/auth_session.dart';
 import '../models/auth_user.dart';
 import '../models/thought.dart';
 
@@ -130,7 +131,7 @@ class ApiService {
     }
   }
 
-  Future<AuthUser> login({
+  Future<AuthSession> login({
     required String email,
     required String password,
   }) async {
@@ -154,6 +155,25 @@ class ApiService {
 
     if (response.statusCode != 200) {
       final message = json['message'] as String? ?? '登录失败';
+      throw Exception(message);
+    }
+
+    return AuthSession.fromJson(json);
+  }
+
+  Future<AuthUser> fetchCurrentUser({required String accessToken}) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/me');
+
+    final response = await http
+        .get(uri, headers: {'Authorization': 'Bearer $accessToken'})
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 200) {
+      final message = json['message'] as String? ?? '获取用户信息失败';
+
       throw Exception(message);
     }
 

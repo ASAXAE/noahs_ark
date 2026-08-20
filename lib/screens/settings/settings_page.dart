@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
-import '../../models/auth_user.dart';
+import '../../models/auth_session.dart';
+import '../../services/auth_session_storage.dart';
+
 import '../auth/login_page.dart';
 import 'local_first_info_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
     super.key,
-    required this.authUserNotifier,
+    required this.authSessionNotifier,
     required this.onExportBackup,
     required this.onRestoreBackup,
   });
 
-  final ValueNotifier<AuthUser?> authUserNotifier;
+  final ValueNotifier<AuthSession?> authSessionNotifier;
   final Future<void> Function() onExportBackup;
   final Future<void> Function() onRestoreBackup;
 
@@ -26,10 +28,10 @@ class SettingsPage extends StatelessWidget {
           Text('账户与服务', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
 
-          ValueListenableBuilder<AuthUser?>(
-            valueListenable: authUserNotifier,
-            builder: (context, user, child) {
-              if (user == null) {
+          ValueListenableBuilder<AuthSession?>(
+            valueListenable: authSessionNotifier,
+            builder: (context, session, child) {
+              if (session == null) {
                 return Card(
                   clipBehavior: Clip.antiAlias,
                   child: ListTile(
@@ -38,23 +40,23 @@ class SettingsPage extends StatelessWidget {
                     subtitle: const Text('可选功能，不登录也能继续使用本地记录'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      final loggedInUser = await Navigator.of(context)
-                          .push<AuthUser>(
-                            MaterialPageRoute<AuthUser>(
+                      final loggedInSession = await Navigator.of(context)
+                          .push<AuthSession>(
+                            MaterialPageRoute<AuthSession>(
                               builder: (_) => const LoginPage(),
                             ),
                           );
 
-                      if (!context.mounted || loggedInUser == null) {
+                      if (!context.mounted || loggedInSession == null) {
                         return;
                       }
 
-                      authUserNotifier.value = loggedInUser;
+                      authSessionNotifier.value = loggedInSession;
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '登录成功，欢迎回来：${loggedInUser.displayName}',
+                            '登录成功，欢迎回来：${loggedInSession.user.displayName}',
                           ),
                         ),
                       );
@@ -62,6 +64,8 @@ class SettingsPage extends StatelessWidget {
                   ),
                 );
               }
+
+              final user = session.user;
 
               return Card(
                 clipBehavior: Clip.antiAlias,
@@ -79,8 +83,12 @@ class SettingsPage extends StatelessWidget {
                       leading: const Icon(Icons.logout),
                       title: const Text('退出登录'),
                       subtitle: const Text('退出不会删除本地记录'),
-                      onTap: () {
-                        authUserNotifier.value = null;
+                      onTap: () async {
+                        await AuthSessionStorage.instance.deleteAccessToken();
+
+                        authSessionNotifier.value = null;
+
+                        if (!context.mounted) return;
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('已退出登录，本地记录仍然保留')),

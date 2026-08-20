@@ -8,6 +8,7 @@ const {
 
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const pool = require('../src/database');
 
@@ -203,21 +204,82 @@ describe('Auth API', () => {
                 },
             );
 
-            assert.equal(loginResponse.status, 200);
+           const loginResult = await loginResponse.json();
 
-            const loggedInUser = await loginResponse.json();
+           assert.equal(
+               typeof loginResult.accessToken,
+               'string',
+           );
 
-            assert.equal(
-                loggedInUser.displayName,
-                'Login Test User',
-            );
+           assert.ok(loginResult.accessToken.length > 0);
 
-            assert.equal(loggedInUser.email, email);
-            assert.equal(loggedInUser.password, undefined);
-            assert.equal(
-                loggedInUser.passwordHash,
-                undefined,
-            );
+           assert.equal(
+               loginResult.user.displayName,
+               'Login Test User',
+           );
+
+           assert.equal(loginResult.user.email, email);
+           assert.equal(loginResult.user.password, undefined);
+           assert.equal(
+               loginResult.user.passwordHash,
+               undefined,
+           );
+
+           const tokenPayload = jwt.verify(
+               loginResult.accessToken,
+               process.env.JWT_SECRET,
+           );
+
+           assert.equal(
+               tokenPayload.sub,
+               String(loginResult.user.id),
+           );
+
+           const meResponse = await fetch(
+               `${baseUrl}/auth/me`,
+               {
+                   headers: {
+                       Authorization:
+                           `Bearer ${loginResult.accessToken}`,
+                   },
+               },
+           );
+
+           assert.equal(meResponse.status, 200);
+
+           const currentUser = await meResponse.json();
+
+           assert.equal(
+               currentUser.id,
+               loginResult.user.id,
+           );
+
+           assert.equal(
+               currentUser.displayName,
+               'Login Test User',
+           );
+
+           assert.equal(currentUser.email, email);
+           assert.equal(currentUser.password, undefined);
+           assert.equal(currentUser.passwordHash, undefined);
+
+           const missingTokenResponse = await fetch(
+               `${baseUrl}/auth/me`,
+           );
+
+           assert.equal(missingTokenResponse.status, 401);
+
+           const invalidTokenResponse = await fetch(
+               `${baseUrl}/auth/me`,
+               {
+                   headers: {
+                       Authorization:
+                           'Bearer invalid-token',
+                   },
+               },
+           );
+
+           assert.equal(invalidTokenResponse.status, 401);
 
             const wrongPasswordResponse = await fetch(
                 `${baseUrl}/auth/login`,

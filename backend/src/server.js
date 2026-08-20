@@ -6,6 +6,14 @@ require('dotenv').config();
 const pool = require('./database');
 
 const {
+    createAccessToken,
+} = require('./auth_token');
+
+const {
+    requireAuthentication,
+} = require('./auth_middleware');
+
+const {
     validateThoughtInput,
 } = require('./thought_validation');
 
@@ -135,11 +143,16 @@ app.post('/auth/login', async (request, response) => {
             });
         }
 
+        const accessToken = createAccessToken(user.id);
+
         return response.status(200).json({
-            id: user.id,
-            displayName: user.displayName,
-            email: user.email,
-            createdAt: user.createdAt,
+            accessToken,
+            user: {
+                id: user.id,
+                displayName: user.displayName,
+                email: user.email,
+                createdAt: user.createdAt,
+            },
         });
     } catch (error) {
         console.error('Failed to log in user:', error.message);
@@ -149,6 +162,47 @@ app.post('/auth/login', async (request, response) => {
         });
     }
 });
+
+app.get(
+    '/auth/me',
+    requireAuthentication,
+    async (request, response) => {
+        try {
+            const result = await pool.query(
+                `
+                    SELECT
+                        id,
+                        display_name AS "displayName",
+                        email,
+                        created_at AS "createdAt"
+                    FROM users
+                    WHERE id = $1
+                `,
+                [request.auth.userId],
+            );
+
+            const user = result.rows[0];
+
+            if (user === undefined) {
+                return response.status(401).json({
+                    message: 'User account not found',
+                });
+            }
+
+            return response.status(200).json(user);
+        } catch (error) {
+            console.error(
+                'Failed to fetch authenticated user:',
+                error.message,
+            );
+
+            return response.status(500).json({
+                message:
+                    'Failed to fetch authenticated user',
+            });
+        }
+    },
+);
 
 app.get('/thoughts', async (request, response) => {
     try {
