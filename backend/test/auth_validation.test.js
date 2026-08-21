@@ -11,7 +11,7 @@ describe('validateRegistrationInput', () => {
         const result = validateRegistrationInput({
             displayName: '  Test User  ',
             email: '  TEST@EXAMPLE.COM  ',
-            password: 'password123',
+            password: 'StrongPassword123',
         });
 
         assert.deepEqual(result.errors, []);
@@ -19,15 +19,25 @@ describe('validateRegistrationInput', () => {
         assert.deepEqual(result.value, {
             displayName: 'Test User',
             email: 'test@example.com',
-            password: 'password123',
+            password: 'StrongPassword123',
         });
+    });
+
+    test('accepts an eight-character password with letters and numbers', () => {
+        const result = validateRegistrationInput({
+            displayName: 'Test User',
+            email: 'test@example.com',
+            password: 'Ark2026a',
+        });
+
+        assert.deepEqual(result.errors, []);
     });
 
     test('rejects an invalid email', () => {
         const result = validateRegistrationInput({
             displayName: 'Test User',
             email: 'invalid-email',
-            password: 'password123',
+            password: 'StrongPassword123',
         });
 
         assert.deepEqual(result.errors, [
@@ -39,7 +49,7 @@ describe('validateRegistrationInput', () => {
         const result = validateRegistrationInput({
             displayName: 'Test User',
             email: 'test@example.com',
-            password: '1234567',
+            password: 'Pass123',
         });
 
         assert.deepEqual(result.errors, [
@@ -47,10 +57,34 @@ describe('validateRegistrationInput', () => {
         ]);
     });
 
+    test('rejects a password without a letter', () => {
+        const result = validateRegistrationInput({
+            displayName: 'Test User',
+            email: 'test@example.com',
+            password: '12345678',
+        });
+
+        assert.deepEqual(result.errors, [
+            'password must contain at least one letter and one number',
+        ]);
+    });
+
+    test('rejects a password without a number', () => {
+        const result = validateRegistrationInput({
+            displayName: 'Test User',
+            email: 'test@example.com',
+            password: 'PasswordOnly',
+        });
+
+        assert.deepEqual(result.errors, [
+            'password must contain at least one letter and one number',
+        ]);
+    });
+
     test('rejects a missing display name', () => {
         const result = validateRegistrationInput({
             email: 'test@example.com',
-            password: 'password123',
+            password: 'StrongPassword123',
         });
 
         assert.deepEqual(result.errors, [

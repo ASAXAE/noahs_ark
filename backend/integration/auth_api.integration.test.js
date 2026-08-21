@@ -131,7 +131,7 @@ describe('Auth API', () => {
                 body: JSON.stringify({
                     displayName: '',
                     email: 'invalid-email',
-                    password: '1234567',
+                    password: 'Pass123',
                 }),
             },
         );
@@ -162,13 +162,40 @@ describe('Auth API', () => {
                 'password must contain at least 8 characters',
             ),
         );
+
+        const numericPasswordResponse = await fetch(
+            `${baseUrl}/auth/register`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type':
+                        'application/json; charset=utf-8',
+                },
+                body: JSON.stringify({
+                    displayName: 'Numeric Password User',
+                    email: `numeric-${Date.now()}@example.com`,
+                    password: '12345678',
+                }),
+            },
+        );
+
+        assert.equal(numericPasswordResponse.status, 400);
+
+        const numericPasswordBody =
+            await numericPasswordResponse.json();
+
+        assert.ok(
+            numericPasswordBody.errors.includes(
+                'password must contain at least one letter and one number',
+            ),
+        );
     });
 
     test('logs in a registered user and rejects invalid credentials', async () => {
         const email =
             `login-${Date.now()}@example.com`;
 
-        const password = 'LoginTest123!';
+        const password = 'LoginTest123!Secure';
 
         try {
             const registerResponse = await fetch(

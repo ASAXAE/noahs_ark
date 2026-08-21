@@ -131,6 +131,39 @@ class ApiService {
     }
   }
 
+  Future<AuthUser> register({
+    required String displayName,
+    required String email,
+    required String password,
+  }) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/register');
+
+    final requestBody = jsonEncode({
+      'displayName': displayName.trim(),
+      'email': email.trim(),
+      'password': password,
+    });
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: requestBody,
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 201) {
+      final message = json['message'] as String? ?? '注册失败';
+
+      throw Exception(message);
+    }
+
+    return AuthUser.fromJson(json);
+  }
+
   Future<AuthSession> login({
     required String email,
     required String password,

@@ -43,6 +43,10 @@ function validateRegistrationInput(body = {}) {
         errors.push('password is required');
     } else if (password.length < 8) {
         errors.push('password must contain at least 8 characters');
+    } else if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        errors.push(
+            'password must contain at least one letter and one number',
+        );
     }
 
     if (password.length > 72) {

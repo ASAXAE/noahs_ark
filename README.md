@@ -32,7 +32,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Validated JSON backup restore into SQLite
 - Merge-style restore that preserves existing data and skips duplicate records
 - Settings and in-app local-first privacy information
-- Optional backend login without blocking local-only use
+- Optional backend account registration and login without blocking local-only use
+- Registration form with password confirmation and client-side validation
 - JWT access tokens stored with Flutter secure storage
 - Login restoration after an app restart and explicit logout
 - Branded Android adaptive launcher icon
@@ -51,6 +52,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - `users` and `thoughts` tables connected by a foreign key
 - SQL migration files for reproducible database setup
 - Experimental `POST /auth/register` and `POST /auth/login` endpoints
+- Registration password policy enforced by both Flutter and Express: 8–72
+  characters with at least one English letter and one number
 - Password hashing with `bcryptjs`; plain-text passwords are never stored
 - Signed JWT access tokens and protected `GET /auth/me`
 - Duplicate-email protection, credential verification and authentication tests
@@ -206,9 +209,14 @@ Example registration request body:
 {
   "displayName": "Day 30 User",
   "email": "day30@example.com",
-  "password": "example-password"
+  "password": "NoahsArk2026"
 }
 ```
+
+Registration passwords must contain 8–72 characters, including at least one
+English letter and one number. Symbols are allowed but not required. The same
+policy is checked in Flutter for immediate feedback and again by Express as the
+authoritative security boundary.
 
 The registration response contains only the new user's safe public fields. It
 does not return the password or password hash.
@@ -218,7 +226,7 @@ Example login request body:
 ```json
 {
   "email": "day30@example.com",
-  "password": "example-password"
+  "password": "NoahsArk2026"
 }
 ```
 
@@ -424,7 +432,7 @@ users created by the tests are removed afterward.
 - Add CI checks for Flutter and backend tests
 - Protect the Thought API with JWT middleware and replace the fixed test user
   with per-user authorization
-- Add registration UI, email verification and account lifecycle features
+- Add email verification and account lifecycle features
 - Design an opt-in, privacy-preserving sync model
 - Containerize the experimental backend when deployment work begins
 
