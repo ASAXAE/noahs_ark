@@ -18,6 +18,68 @@ class SettingsPage extends StatelessWidget {
   final Future<void> Function() onExportBackup;
   final Future<void> Function() onRestoreBackup;
 
+  void _showLoginSuccess(BuildContext context, AuthSession session) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        leading: const Icon(Icons.check_circle_outline),
+        content: Text('登录成功，欢迎回来：${session.user.displayName}'),
+        actions: [
+          TextButton(
+            onPressed: messenger.hideCurrentMaterialBanner,
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
+      }
+    });
+  }
+
+  Future<void> _confirmLogout(BuildContext context) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.logout),
+        title: const Text('确认退出登录？'),
+        content: const Text('退出后账户功能将暂停，但本地记录不会被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('退出登录'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout != true) {
+      return;
+    }
+
+    await AuthSessionStorage.instance.deleteAccessToken();
+
+    authSessionNotifier.value = null;
+
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('已退出登录，本地记录仍然保留'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -52,14 +114,7 @@ class SettingsPage extends StatelessWidget {
                       }
 
                       authSessionNotifier.value = loggedInSession;
-
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '登录成功，欢迎回来：${loggedInSession.user.displayName}',
-                          ),
-                        ),
-                      );
+                      _showLoginSuccess(context, loggedInSession);
                     },
                   ),
                 );
@@ -71,29 +126,78 @@ class SettingsPage extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [
-                    ListTile(
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.person_outline),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 26,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.secondaryContainer,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onSecondaryContainer,
+                            child: const Icon(Icons.person_outline, size: 28),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.displayName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  user.email,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '已登录',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onPrimaryContainer,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                      title: Text(user.displayName),
-                      subtitle: Text(user.email),
                     ),
                     const Divider(height: 1),
                     ListTile(
                       leading: const Icon(Icons.logout),
                       title: const Text('退出登录'),
                       subtitle: const Text('退出不会删除本地记录'),
-                      onTap: () async {
-                        await AuthSessionStorage.instance.deleteAccessToken();
-
-                        authSessionNotifier.value = null;
-
-                        if (!context.mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('已退出登录，本地记录仍然保留')),
-                        );
-                      },
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _confirmLogout(context),
                     ),
                   ],
                 ),

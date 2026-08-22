@@ -34,8 +34,12 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Settings and in-app local-first privacy information
 - Optional backend account registration and login without blocking local-only use
 - Registration form with password confirmation and client-side validation
+- Refined authentication UX with clear login/register switching, disabled form
+  controls while submitting and localized Chinese error feedback
 - JWT access tokens stored with Flutter secure storage
 - Login restoration after an app restart and explicit logout
+- Account status card, top-of-page login confirmation and logout confirmation
+  that explains local records remain on the device
 - Branded Android adaptive launcher icon
 - JSON serialization, backup parsing and model tests
 
@@ -144,7 +148,8 @@ lib/
 
 test/
 ├── models/         Flutter model tests
-└── services/       Backup parsing tests
+├── services/       Backup parsing tests
+└── utils/          Authentication error-message tests
 
 backend/
 ├── integration/
@@ -234,7 +239,10 @@ The login endpoint returns a signed JWT access token plus safe user fields. The
 Flutter app verifies the token through `/auth/me`, stores it with secure
 platform storage and restores the optional account session after an app
 restart. Logging out deletes the stored token. Local SQLite records remain
-available whether or not the user is logged in.
+available whether or not the user is logged in. Authentication forms disable
+their controls while a request is running, translate known API and network
+errors into Chinese user-facing messages, and require confirmation before
+logout.
 
 ## Local setup
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
+import '../../utils/auth_error_message.dart';
 import 'register_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -16,6 +17,7 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
 
   bool _isSubmitting = false;
   bool _obscurePassword = true;
@@ -64,7 +66,7 @@ class _LoginPageState extends State<LoginPage> {
         _isSubmitting = false;
       });
 
-      final message = error.toString().replaceFirst('Exception: ', '');
+      final message = authErrorMessage(error);
 
       ScaffoldMessenger.of(
         context,
@@ -83,6 +85,7 @@ class _LoginPageState extends State<LoginPage> {
 
     _emailController.text = registeredEmail;
     _passwordController.clear();
+    _passwordFocusNode.requestFocus();
 
     ScaffoldMessenger.of(
       context,
@@ -93,6 +96,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -128,6 +132,7 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 32),
                 TextFormField(
                   controller: _emailController,
+                  enabled: !_isSubmitting,
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.email],
                   decoration: const InputDecoration(
@@ -151,17 +156,21 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
+                  focusNode: _passwordFocusNode,
+                  enabled: !_isSubmitting,
                   obscureText: _obscurePassword,
                   autofillHints: const [AutofillHints.password],
                   decoration: InputDecoration(
                     labelText: '密码',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_outlined
@@ -199,18 +208,26 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 12),
 
-                TextButton(
-                  onPressed: _isSubmitting ? null : _openRegisterPage,
-                  child: const Text('还没有账户？创建账户'),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('还没有账户？'),
+                    TextButton(
+                      onPressed: _isSubmitting ? null : _openRegisterPage,
+                      child: const Text('创建账户'),
+                    ),
+                  ],
                 ),
 
-                TextButton(
+                TextButton.icon(
                   onPressed: _isSubmitting
                       ? null
                       : () {
                           Navigator.of(context).pop();
                         },
-                  child: const Text('暂不登录，继续本地使用'),
+                  icon: const Icon(Icons.phone_android_outlined),
+                  label: const Text('暂不登录，继续本地使用'),
                 ),
               ],
             ),
