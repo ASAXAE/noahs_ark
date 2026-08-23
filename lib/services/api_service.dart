@@ -2,6 +2,7 @@ import 'dart:convert';
 import '../models/auth_session.dart';
 import '../models/auth_user.dart';
 import '../models/thought.dart';
+import 'api_exception.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -207,7 +208,7 @@ class ApiService {
     if (response.statusCode != 200) {
       final message = json['message'] as String? ?? '获取用户信息失败';
 
-      throw Exception(message);
+      throw ApiException(statusCode: response.statusCode, message: message);
     }
 
     return AuthUser.fromJson(json);

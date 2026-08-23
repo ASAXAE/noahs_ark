@@ -11,6 +11,7 @@ import '../../services/backup_service.dart';
 import '../settings/settings_page.dart';
 import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
+import '../../services/api_exception.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -56,6 +57,15 @@ class _HomePageState extends State<HomePage> {
         accessToken: accessToken,
         user: user,
       );
+    } on ApiException catch (error) {
+      if (error.isUnauthorized) {
+        await AuthSessionStorage.instance.deleteAccessToken();
+
+        if (!mounted) return;
+        _authSessionNotifier.value = null;
+      }
+
+      debugPrint('恢复登录状态失败：$error');
     } catch (error) {
       debugPrint('恢复登录状态失败：$error');
     }

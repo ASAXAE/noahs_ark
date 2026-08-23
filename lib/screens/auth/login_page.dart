@@ -100,44 +100,113 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  InputDecoration _inputDecoration({
+    required String hintText,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+
+    OutlineInputBorder fieldBorder(Color color, {double width = 1}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: TextStyle(color: colors.outline),
+      prefixIcon: Icon(icon, size: 20, color: colors.onSurfaceVariant),
+      prefixIconConstraints: const BoxConstraints(minWidth: 48),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: colors.surface,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: fieldBorder(colors.outlineVariant),
+      enabledBorder: fieldBorder(colors.outlineVariant),
+      focusedBorder: fieldBorder(colors.primary, width: 1.5),
+      errorBorder: fieldBorder(colors.error),
+      focusedErrorBorder: fieldBorder(colors.error, width: 1.5),
+      errorMaxLines: 2,
+    );
+  }
+
+  Widget _fieldLabel(String label) {
+    return Text(
+      label,
+      style: Theme.of(
+        context,
+      ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('登录')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.sailing_outlined, size: 64),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      Theme.of(context).colorScheme.primary.withAlpha(18),
+                      Theme.of(context).colorScheme.surface,
+                    ),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha(36),
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.shield_outlined,
+                        size: 19,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '登录仅用于体验服务器功能，本地记录不会自动上传。',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 24),
-                Text(
-                  '连接你的方舟',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '登录用于体验服务器功能，本地记录不会自动上传。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                ),
-                const SizedBox(height: 32),
+
+                _fieldLabel('邮箱'),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailController,
                   enabled: !_isSubmitting,
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(
-                    labelText: '邮箱',
-                    prefixIcon: Icon(Icons.email_outlined),
+                  decoration: _inputDecoration(
+                    hintText: '输入您的邮箱',
+                    icon: Icons.email_outlined,
                   ),
                   validator: (value) {
                     final email = value?.trim() ?? '';
@@ -154,16 +223,21 @@ class _LoginPageState extends State<LoginPage> {
                   },
                 ),
                 const SizedBox(height: 16),
+
+                _fieldLabel('密码'),
+                const SizedBox(height: 6),
                 TextFormField(
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
                   enabled: !_isSubmitting,
                   obscureText: _obscurePassword,
+                  textInputAction: TextInputAction.done,
                   autofillHints: const [AutofillHints.password],
-                  decoration: InputDecoration(
-                    labelText: '密码',
-                    prefixIcon: const Icon(Icons.lock_outline),
+                  decoration: _inputDecoration(
+                    hintText: '输入密码',
+                    icon: Icons.lock_outline,
                     suffixIcon: IconButton(
+                      tooltip: _obscurePassword ? '显示密码' : '隐藏密码',
                       onPressed: _isSubmitting
                           ? null
                           : () {
@@ -173,8 +247,8 @@ class _LoginPageState extends State<LoginPage> {
                             },
                       icon: Icon(
                         _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
                       ),
                     ),
                   ),
@@ -194,16 +268,20 @@ class _LoginPageState extends State<LoginPage> {
                 const SizedBox(height: 24),
                 SizedBox(
                   height: 52,
-                  child: FilledButton.icon(
+                  child: FilledButton(
                     onPressed: _isSubmitting ? null : _login,
-                    icon: _isSubmitting
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: _isSubmitting
                         ? const SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.login),
-                    label: Text(_isSubmitting ? '登录中...' : '登录'),
+                        : const Text('登录'),
                   ),
                 ),
                 const SizedBox(height: 12),
