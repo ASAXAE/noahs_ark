@@ -204,7 +204,10 @@ app.get(
     },
 );
 
-app.get('/thoughts', async (request, response) => {
+app.get(
+    '/thoughts',
+    requireAuthentication,
+    async (request, response) => {
     try {
         const result = await pool.query(
             `
@@ -231,7 +234,8 @@ app.get('/thoughts', async (request, response) => {
             message: 'Failed to fetch thoughts',
         });
     }
-});
+    },
+);
 
 app.get('/database-health', async (request, response) => {
     try {
@@ -253,7 +257,10 @@ app.get('/database-health', async (request, response) => {
     }
 });
 
-app.post('/thoughts', async (request, response) => {
+app.post(
+    '/thoughts',
+    requireAuthentication,
+    async (request, response) => {
     const validation = validateThoughtInput(request.body);
 
     if (validation.errors.length > 0) {
@@ -302,9 +309,13 @@ app.post('/thoughts', async (request, response) => {
             message: 'Failed to create thought',
         });
     }
-});
+    },
+);
 
-app.patch('/thoughts/:id', async (request, response) => {
+app.patch(
+    '/thoughts/:id',
+    requireAuthentication,
+    async (request, response) => {
     const thoughtId = request.params.id;
     const { title, content, tag, isFavorite = false } = request.body;
 
@@ -384,9 +395,13 @@ app.patch('/thoughts/:id', async (request, response) => {
             message: 'Failed to update thought',
         });
     }
-});
+    },
+);
 
-app.delete('/thoughts/:id', async (request, response) => {
+app.delete(
+    '/thoughts/:id',
+    requireAuthentication,
+    async (request, response) => {
     const thoughtId = request.params.id;
 
     if (!/^[1-9]\d*$/.test(thoughtId)) {
@@ -423,7 +438,8 @@ app.delete('/thoughts/:id', async (request, response) => {
             message: 'Failed to delete thought',
         });
     }
-});
+    },
+);
 
 app.listen(port, '0.0.0.0', () => {
     console.log(
