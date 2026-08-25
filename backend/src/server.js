@@ -223,7 +223,7 @@ app.get(
                 WHERE user_id = $1
                 ORDER BY created_at DESC
             `,
-            [1],
+            [request.auth.userId],
         );
 
         response.json(result.rows);
@@ -293,7 +293,7 @@ app.post(
                     updated_at AS "updatedAt"
             `,
             [
-                1,
+                request.auth.userId,
                 thought.title,
                 thought.content,
                 thought.tag,
@@ -377,7 +377,7 @@ app.patch(
                 tag.trim(),
                 isFavorite,
                 thoughtId,
-                1,
+                request.auth.userId,
             ],
         );
 
@@ -420,7 +420,7 @@ app.delete(
             `,
             [
                 thoughtId,
-                1,
+                request.auth.userId,
             ],
         );
 
