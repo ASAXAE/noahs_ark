@@ -59,7 +59,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Registration password policy enforced by both Flutter and Express: 8–72
   characters with at least one English letter and one number
 - Password hashing with `bcryptjs`; plain-text passwords are never stored
-- Signed JWT access tokens and protected `GET /auth/me`
+- Signed JWT access tokens protect `GET /auth/me` and every Thought CRUD route
+- PostgreSQL Thought queries are scoped to the authenticated user, with
+  two-account isolation coverage
 - Duplicate-email protection, credential verification and authentication tests
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
@@ -389,9 +391,11 @@ On Windows PowerShell, use `npm.cmd test` if execution policy blocks `npm.ps1`.
 The integration tests require the Express server and PostgreSQL database to be
 running. They verify the Thought API CRUD flow plus registration, login, JWT
 issuance, authenticated `/auth/me` access and rejection of missing or invalid
-tokens. They also cover input rejection, password hashing, duplicate-email
-protection and generic rejection of invalid credentials. Temporary records and
-users created by the tests are removed afterward.
+tokens. They also prove that one authenticated user cannot read, update or
+delete another user's thoughts. Input rejection, password hashing,
+duplicate-email protection and generic rejection of invalid credentials are
+covered as well. Temporary records and users created by the tests are removed
+afterward.
 
 ## Privacy and security
 
@@ -414,18 +418,17 @@ users created by the tests are removed afterward.
   SQLite or plain-text preferences.
 - Logging out deletes the locally stored access token without deleting journal
   records.
-- Production cloud sync will require authentication, HTTPS, per-user
-  authorization, account deletion, secure secret management and a privacy
-  policy.
+- Production cloud sync will still require HTTPS, account deletion, secure
+  secret management, deployment hardening and a privacy policy.
 - An administration interface must not expose private journal content by
   default.
 
 ## Current limitations
 
-- Server requests currently operate as a fixed test user (`user_id = 1`).
-- Registration, login, JWT verification and current-user lookup are implemented
-  for learning and testing, but the Thought API is not yet scoped to the
-  authenticated user.
+- Registration, login, JWT verification, current-user lookup and per-user
+  Thought authorization are implemented for local learning and testing.
+- Flutter's experimental Thought API requests do not yet automatically attach
+  the saved JWT bearer token.
 - Account deletion, refresh tokens and email verification are not implemented.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
@@ -438,8 +441,7 @@ users created by the tests are removed afterward.
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Add CI checks for Flutter and backend tests
-- Protect the Thought API with JWT middleware and replace the fixed test user
-  with per-user authorization
+- Attach Flutter's saved JWT bearer token to experimental Thought API requests
 - Add email verification and account lifecycle features
 - Design an opt-in, privacy-preserving sync model
 - Containerize the experimental backend when deployment work begins
