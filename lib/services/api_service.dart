@@ -3,6 +3,7 @@ import '../models/auth_session.dart';
 import '../models/auth_user.dart';
 import '../models/thought.dart';
 import 'api_exception.dart';
+import 'auth_session_storage.dart';
 
 import 'package:http/http.dart' as http;
 
@@ -29,6 +30,22 @@ class ApiService {
     defaultValue: 'http://127.0.0.1:3000',
   );
 
+  Future<Map<String, String>> _authenticatedHeaders({
+    bool includeJsonContentType = false,
+  }) async {
+    final accessToken = await AuthSessionStorage.instance.readAccessToken();
+
+    if (accessToken == null || accessToken.isEmpty) {
+      throw const ApiException(statusCode: 401, message: '请先登录');
+    }
+
+    return {
+      if (includeJsonContentType)
+        'Content-Type': 'application/json; charset=UTF-8',
+      'Authorization': 'Bearer $accessToken',
+    };
+  }
+
   Future<String> fetchHealthMessage() async {
     final uri = Uri.parse('$_localBaseUrl/health');
 
@@ -45,7 +62,11 @@ class ApiService {
   Future<List<Thought>> fetchThoughts() async {
     final uri = Uri.parse('$_localBaseUrl/thoughts');
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final headers = await _authenticatedHeaders();
+
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
@@ -61,6 +82,7 @@ class ApiService {
 
   Future<Thought> createTestThought() async {
     final uri = Uri.parse('$_localBaseUrl/thoughts');
+    final headers = await _authenticatedHeaders(includeJsonContentType: true);
 
     final requestBody = jsonEncode({
       'title': 'Day 16 API 测试',
@@ -69,11 +91,7 @@ class ApiService {
     });
 
     final response = await http
-        .post(
-          uri,
-          headers: {'Content-Type': 'application/json; charset=UTF-8'},
-          body: requestBody,
-        )
+        .post(uri, headers: headers, body: requestBody)
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 201) {
@@ -88,6 +106,7 @@ class ApiService {
 
   Future<Thought> updateThought(Thought thought) async {
     final id = thought.id;
+    final headers = await _authenticatedHeaders(includeJsonContentType: true);
 
     if (id == null) {
       throw ArgumentError('Thought id cannot be null');
@@ -103,11 +122,7 @@ class ApiService {
     });
 
     final response = await http
-        .patch(
-          uri,
-          headers: {'Content-Type': 'application/json; charset=UTF-8'},
-          body: requestBody,
-        )
+        .patch(uri, headers: headers, body: requestBody)
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
@@ -122,9 +137,10 @@ class ApiService {
 
   Future<void> deleteThought(int id) async {
     final uri = Uri.parse('$_localBaseUrl/thoughts/$id');
+    final headers = await _authenticatedHeaders();
 
     final response = await http
-        .delete(uri)
+        .delete(uri, headers: headers)
         .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 204) {

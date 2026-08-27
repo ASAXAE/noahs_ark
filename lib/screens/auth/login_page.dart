@@ -183,12 +183,13 @@ class _LoginPageState extends State<LoginPage> {
                       Expanded(
                         child: Text(
                           '登录仅用于体验服务器功能，本地记录不会自动上传。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
                         ),
                       ),
                     ],

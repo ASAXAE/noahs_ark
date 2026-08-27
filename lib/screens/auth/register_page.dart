@@ -102,9 +102,9 @@ class _RegisterPageState extends State<RegisterPage> {
       children: [
         Text(
           label,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
         ),
         if (trailing != null) ...[const Spacer(), trailing],
       ],
@@ -173,12 +173,13 @@ class _RegisterPageState extends State<RegisterPage> {
                       Expanded(
                         child: Text(
                           '账户功能仍在实验阶段，本地记录不会自动上传。',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
                         ),
                       ),
                     ],
@@ -399,8 +400,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       onPressed: _isSubmitting
                           ? null
                           : () {
-                            Navigator.of(context).pop();
-                          },
+                              Navigator.of(context).pop();
+                            },
                       child: const Text('直接登录'),
                     ),
                   ],

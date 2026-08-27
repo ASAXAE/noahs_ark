@@ -12,9 +12,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 </p>
 
 > Status: V1 release candidate. The offline app is functional and the signed
-> Android APK has passed local smoke testing, while the
-> backend still uses a fixed test user and is not a production-ready sync
-> service.
+> Android APK has passed local smoke testing. The experimental backend now
+> supports authenticated, per-user Thought CRUD, but it is not a
+> production-ready sync service.
 
 ## Features / 已完成功能
 
@@ -38,6 +38,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   controls while submitting and localized Chinese error feedback
 - JWT access tokens stored with Flutter secure storage
 - Login restoration after an app restart and explicit logout
+- Saved JWT bearer tokens automatically attached to every experimental Thought
+  API request (`GET`, `POST`, `PATCH` and `DELETE`)
 - Account status card, top-of-page login confirmation and logout confirmation
   that explains local records remain on the device
 - Branded Android adaptive launcher icon
@@ -96,11 +98,11 @@ Experimental server records
 
 Flutter UI
     ↓
-ApiService (HTTP + JSON)
+ApiService (HTTP + JSON + saved Bearer token)
     ↓
 Express API
     ↓
-Parameterized SQL
+JWT authentication + parameterized, user-scoped SQL
     ↓
 PostgreSQL
 ```
@@ -188,10 +190,10 @@ assets/
 | `POST` | `/auth/register` | Validate and register a backend test user |
 | `POST` | `/auth/login` | Verify credentials and issue a JWT access token |
 | `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
-| `GET` | `/thoughts` | Fetch server-side test records |
-| `POST` | `/thoughts` | Create a server-side test record |
-| `PATCH` | `/thoughts/:id` | Update a server-side test record |
-| `DELETE` | `/thoughts/:id` | Delete a server-side test record |
+| `GET` | `/thoughts` | Fetch the authenticated user's server records |
+| `POST` | `/thoughts` | Create a record for the authenticated user |
+| `PATCH` | `/thoughts/:id` | Update a record owned by the authenticated user |
+| `DELETE` | `/thoughts/:id` | Delete a record owned by the authenticated user |
 
 Example request body:
 
@@ -246,6 +248,13 @@ their controls while a request is running, translate known API and network
 errors into Chinese user-facing messages, and require confirmation before
 logout.
 
+For the experimental server-record interface, `ApiService` reads the saved
+access token before each Thought request and sends it as
+`Authorization: Bearer <token>`. Logged-out requests are rejected locally, and
+Express uses the verified JWT user ID to isolate PostgreSQL records between
+accounts. This path remains separate from the default SQLite journal: local
+records are never uploaded automatically.
+
 ## Local setup
 
 ### Prerequisites
@@ -292,7 +301,8 @@ psql -U postgres -h localhost -d noahs_ark -f sql/002_create_thoughts.sql
 psql -U postgres -h localhost -d noahs_ark -f sql/003_add_password_hash.sql
 ```
 
-The current learning version expects a test user with `id = 1`.
+The migration files create the schema only. Current Thought routes derive the
+user ID from the verified JWT instead of using a fixed database user.
 
 ### 4. Start Express
 
@@ -397,6 +407,10 @@ duplicate-email protection and generic rejection of invalid credentials are
 covered as well. Temporary records and users created by the tests are removed
 afterward.
 
+Latest Day 41 client verification: `flutter analyze` and `flutter test` pass.
+Manual emulator testing also confirms logged-out rejection and authenticated
+server-record create, read, update and delete operations.
+
 ## Privacy and security
 
 - Offline records are stored locally in SQLite by default.
@@ -427,8 +441,6 @@ afterward.
 
 - Registration, login, JWT verification, current-user lookup and per-user
   Thought authorization are implemented for local learning and testing.
-- Flutter's experimental Thought API requests do not yet automatically attach
-  the saved JWT bearer token.
 - Account deletion, refresh tokens and email verification are not implemented.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
@@ -437,14 +449,37 @@ afterward.
 
 ## Roadmap
 
+### Daily development sequence
+
+- [x] Day 35–41: registration, JWT/401 handling, protected Thought routes,
+  removal of the fixed `user_id = 1`, two-account isolation and automatic
+  Flutter bearer-token headers
+- [ ] Day 42: containerize the experimental Express and PostgreSQL development
+  environment with Docker
+- [ ] Day 43: add a separate local `CaptureDraft` model and SQLite table without
+  changing the meaning of a formal `Thought`
+- [ ] Day 44: add recording permission plus start/stop recording
+- [ ] Day 45: save, play and delete original audio locally
+- [ ] Day 46: add speech-to-text and retry handling while always retaining the
+  original audio
+- [ ] Day 47: build a Flash Thought inbox for recordings and transcripts waiting
+  to be organized
+- [ ] Day 48: convert a draft into a formal `Thought` only after user confirmation,
+  with basic tests and a privacy review
+- [ ] Day 49+: resume email verification, CI, cloud deployment, HTTPS and privacy
+  hardening
+
+The Flash Thought MVP remains local-first. It will not upload recordings to the
+experimental backend, require a title or tag during capture, overwrite original
+audio with generated content, or create a formal `Thought` without explicit user
+confirmation.
+
+### Product backlog
+
 - Test the release candidate on a physical Android device
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
-- Add CI checks for Flutter and backend tests
-- Attach Flutter's saved JWT bearer token to experimental Thought API requests
-- Add email verification and account lifecycle features
 - Design an opt-in, privacy-preserving sync model
-- Containerize the experimental backend when deployment work begins
 
 ## Author
 
