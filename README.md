@@ -411,6 +411,43 @@ Latest Day 41 client verification: `flutter analyze` and `flutter test` pass.
 Manual emulator testing also confirms logged-out rejection and authenticated
 server-record create, read, update and delete operations.
 
+### Docker development environment
+
+Day 42 adds a reproducible local Docker Compose environment containing the
+Express API and PostgreSQL 17. The API is published on port `3000`; PostgreSQL
+is published on host port `5433` to avoid conflicting with a PostgreSQL service
+already using the default host port `5432`.
+
+Create a private `.env.docker` file in the project root with the Compose
+variables referenced by `compose.yaml`. The file is ignored by Git and must not
+be committed. With Docker Desktop running, validate and start the environment:
+
+```powershell
+docker compose --env-file .env.docker config
+docker compose --env-file .env.docker up --build
+```
+
+In a second terminal, verify both services:
+
+```powershell
+docker compose --env-file .env.docker ps
+Invoke-RestMethod http://localhost:3000/health
+Invoke-RestMethod http://localhost:3000/database-health
+```
+
+Host-side integration tests must use the same Docker database credentials and
+JWT secret as the running Compose environment. The verified Day 42 run passes
+all seven authentication, authorization, isolation and Thought API integration
+tests. Stop and remove the containers and Compose network without deleting the
+named PostgreSQL data volume:
+
+```powershell
+docker compose --env-file .env.docker down
+```
+
+Do not add `-v` unless the PostgreSQL development data is intentionally being
+discarded.
+
 ## Privacy and security
 
 - Offline records are stored locally in SQLite by default.
@@ -454,7 +491,7 @@ server-record create, read, update and delete operations.
 - [x] Day 35–41: registration, JWT/401 handling, protected Thought routes,
   removal of the fixed `user_id = 1`, two-account isolation and automatic
   Flutter bearer-token headers
-- [ ] Day 42: containerize the experimental Express and PostgreSQL development
+- [x] Day 42: containerize the experimental Express and PostgreSQL development
   environment with Docker
 - [ ] Day 43: add a separate local `CaptureDraft` model and SQLite table without
   changing the meaning of a formal `Thought`
