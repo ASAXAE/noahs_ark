@@ -19,6 +19,7 @@ class ArkDatabase {
   ArkDatabase._();
 
   static final instance = ArkDatabase._();
+  static const _databaseVersion = 3;
   Database? _database;
 
   Future<Database> get database async => _database ??= await _open();
@@ -27,27 +28,47 @@ class ArkDatabase {
     final path = join(await getDatabasesPath(), 'noahs_ark_v1.db');
     return openDatabase(
       path,
-      version: 2,
-      onCreate: (db, _) => db.execute('''
-        CREATE TABLE thoughts (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL DEFAULT '',
-          content TEXT NOT NULL,
-          tag TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          is_favorite INTEGER NOT NULL DEFAULT 0
-        )
-      '''),
+      version: _databaseVersion,
+      onCreate: (db, _) async {
+        await _createThoughtsTable(db);
+        await _createCaptureDraftsTable(db);
+      },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute(
             "ALTER TABLE thoughts ADD COLUMN title TEXT NOT NULL DEFAULT ''",
           );
         }
+        if (oldVersion < 3) {
+          await _createCaptureDraftsTable(db);
+        }
       },
     );
   }
+
+  Future<void> _createThoughtsTable(Database db) => db.execute('''
+    CREATE TABLE thoughts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      tag TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      is_favorite INTEGER NOT NULL DEFAULT 0
+    )
+  ''');
+
+  Future<void> _createCaptureDraftsTable(Database db) => db.execute('''
+    CREATE TABLE capture_drafts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      audio_path TEXT NOT NULL,
+      transcript TEXT,
+      transcription_status TEXT NOT NULL DEFAULT 'pending',
+      transcription_error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  ''');
 
   Future<List<Thought>> getThoughts({
     String query = '',
