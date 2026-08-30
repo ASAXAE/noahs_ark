@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import '../../database/ark_database.dart';
 import '../../models/thought.dart';
@@ -12,6 +14,7 @@ import '../settings/settings_page.dart';
 import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
+import '../../services/audio_recorder_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,6 +25,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
+  final _audioRecorderService = AudioRecorderService();
   final ValueNotifier<AuthSession?> _authSessionNotifier =
       ValueNotifier<AuthSession?>(null);
 
@@ -31,12 +35,55 @@ class _HomePageState extends State<HomePage> {
   bool _favoritesOnly = false;
   bool _hasSearchText = false;
   String? _selectedTag;
+  bool _isRecording = false;
+  bool _recordingActionInProgress = false;
 
   @override
   void initState() {
     super.initState();
     _loadThoughts();
     _restoreAuthSession();
+  }
+
+  Future<void> _toggleRecording() async {
+    if (_recordingActionInProgress) {
+      return;
+    }
+
+    setState(() => _recordingActionInProgress = true);
+
+    try {
+      if (_isRecording) {
+        await _audioRecorderService.stopRecording();
+
+        if (!mounted) return;
+        setState(() => _isRecording = false);
+        return;
+      }
+
+      final recordingPath = await _audioRecorderService.startRecording();
+
+      if (!mounted) return;
+
+      if (recordingPath == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('需要麦克风权限才能录制闪念')));
+        return;
+      }
+
+      setState(() => _isRecording = true);
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('录音操作失败，请重试')));
+    } finally {
+      if (mounted) {
+        setState(() => _recordingActionInProgress = false);
+      }
+    }
   }
 
   Future<void> _restoreAuthSession() async {
@@ -615,6 +662,24 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
+            tooltip: _isRecording ? '停止录音' : '录制闪念',
+            onPressed: _recordingActionInProgress ? null : _toggleRecording,
+            icon: _recordingActionInProgress
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _isRecording
+                        ? Icons.stop_circle_outlined
+                        : Icons.mic_none_outlined,
+                    color: _isRecording
+                        ? Theme.of(context).colorScheme.error
+                        : null,
+                  ),
+          ),
+          IconButton(
             tooltip: '设置',
             onPressed: _openSettings,
             icon: const Icon(Icons.settings_outlined),
@@ -842,6 +907,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    unawaited(_audioRecorderService.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();
     super.dispose();
