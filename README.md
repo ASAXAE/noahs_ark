@@ -493,9 +493,9 @@ discarded.
   Flutter bearer-token headers
 - [x] Day 42: containerize the experimental Express and PostgreSQL development
   environment with Docker
-- [ ] Day 43: add a separate local `CaptureDraft` model and SQLite table without
+- [x] Day 43: add a separate local `CaptureDraft` model and SQLite table without
   changing the meaning of a formal `Thought`
-- [ ] Day 44: add recording permission plus start/stop recording
+- [x] Day 44: add recording permission plus start/stop recording
 - [ ] Day 45: save, play and delete original audio locally
 - [ ] Day 46: add speech-to-text and retry handling while always retaining the
   original audio
@@ -503,13 +503,60 @@ discarded.
   to be organized
 - [ ] Day 48: convert a draft into a formal `Thought` only after user confirmation,
   with basic tests and a privacy review
-- [ ] Day 49+: resume email verification, CI, cloud deployment, HTTPS and privacy
-  hardening
+- [ ] Day 49: split `HomePage` responsibilities without changing behavior. Move
+  test-server Thought CRUD into a dedicated debug page, extract reusable home UI,
+  and keep only the local Thought list, search, tags, favorites and editing entry
+  in the production Ark page. Do not introduce Bloc, Provider or Riverpod
+- [ ] Day 50: build a Material 3 `AppShell` with Ark, Flash Thought and My
+  destinations while preserving all three page states. My owns account, backup,
+  privacy and about. Do not add a separate AI destination
+- [ ] Day 51: run regression across the Flash Thought MVP, `HomePage` split and
+  navigation. Verify permission denial, recording interruption, restart recovery,
+  transcription failure, audio deletion, confirmed conversion and navigation
+  state, including at least one Android physical-device microphone test. Create
+  `v0.2.0-flash-mvp` only after every check passes
+- [ ] Day 52: establish a formal database migration mechanism
+- [ ] Day 53: add basic CI for Dart format, Flutter analyze/test and Node unit tests
+- [ ] Day 54: extend CI with PostgreSQL, migrations, two-account integration tests
+  and a Docker build
+- [ ] Day 55: add email-verification database structures with expiring,
+  single-use tokens stored only as hashes
+- [ ] Day 56: add a mail-sending adapter, development fake sender, resend flow and
+  rate limits. External services require explicit approval
+- [ ] Day 57: show email-verification state, resend and results in Flutter without
+  restricting local-only use
+- [ ] Day 58: add short-lived access tokens plus refresh-token hashing, rotation,
+  reuse detection, revocation and secure storage
+- [ ] Day 59: add password recovery and reset without revealing whether an email
+  exists, and revoke old sessions after a successful reset
+- [ ] Day 60: add account deletion for cloud accounts, server data and sessions
+  without deleting local SQLite, backups or original audio by default
+- [ ] Day 61: harden the API
+- [ ] Day 62: prepare staging; cloud platform, resources and costs require explicit
+  approval
+- [ ] Day 63: verify HTTPS, database TLS, environment isolation and secret rotation
+- [ ] Day 64: productionize health checks, request IDs, error monitoring and
+  privacy-safe logging
+- [ ] Day 65: configure PostgreSQL backups and complete a real restore exercise
+- [ ] Day 66: finish the privacy policy, retention periods, third-party-service
+  disclosures and recording/transcription consent rules
+- [ ] Day 67: complete full Android physical-device regression
+- [ ] Day 68: prepare versioning, changelog, signed APK/AAB and internal-test notes
+- [ ] Day 69: pass the release gate before creating
+  `v0.3.0-cloud-foundation`
+- [ ] Day 70: write an optional synchronization design document without
+  implementing uploads
+- [ ] Day 71–77: sequentially add UUID and sync metadata, an explicit sync switch,
+  idempotent synchronization, cursor-based upload/download, an offline queue,
+  conflict and deletion propagation, then dual-device and staged-rollout testing.
+  Create `v0.4.0-sync-beta` only after every check passes
 
 The Flash Thought MVP remains local-first. It will not upload recordings to the
 experimental backend, require a title or tag during capture, overwrite original
 audio with generated content, or create a formal `Thought` without explicit user
-confirmation.
+confirmation. Local Thoughts, backups and original audio must never upload
+automatically. AI organization remains deferred until its privacy and
+third-party-service rules are explicitly defined.
 
 ### Product backlog
 
