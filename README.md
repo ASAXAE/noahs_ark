@@ -496,7 +496,7 @@ discarded.
 - [x] Day 43: add a separate local `CaptureDraft` model and SQLite table without
   changing the meaning of a formal `Thought`
 - [x] Day 44: add recording permission plus start/stop recording
-- [ ] Day 45: save, play and delete original audio locally
+- [x] Day 45: save, play and delete original audio locally
 - [ ] Day 46: add speech-to-text and retry handling while always retaining the
   original audio
 - [ ] Day 47: build a Flash Thought inbox for recordings and transcripts waiting

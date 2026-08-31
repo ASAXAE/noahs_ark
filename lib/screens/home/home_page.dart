@@ -15,6 +15,7 @@ import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
 import '../../services/audio_recorder_service.dart';
+import '../../services/audio_playback_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -26,6 +27,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
   final _audioRecorderService = AudioRecorderService();
+  final _audioPlaybackService = AudioPlaybackService();
   final ValueNotifier<AuthSession?> _authSessionNotifier =
       ValueNotifier<AuthSession?>(null);
 
@@ -54,10 +56,26 @@ class _HomePageState extends State<HomePage> {
 
     try {
       if (_isRecording) {
-        await _audioRecorderService.stopRecording();
+        final recordingPath = await _audioRecorderService.stopRecording();
 
         if (!mounted) return;
+
         setState(() => _isRecording = false);
+
+        if (recordingPath != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('原始录音已保存到本机'),
+              action: SnackBarAction(
+                label: '播放',
+                onPressed: () {
+                  unawaited(_playRecording(recordingPath));
+                },
+              ),
+            ),
+          );
+        }
+
         return;
       }
 
@@ -83,6 +101,59 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() => _recordingActionInProgress = false);
       }
+    }
+  }
+
+  Future<void> _playRecording(String filePath) async {
+    try {
+      final didStartPlaying = await _audioPlaybackService.play(filePath);
+
+      if (!mounted) return;
+
+      if (!didStartPlaying) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('找不到录音文件')));
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('正在播放原始录音'),
+          action: SnackBarAction(
+            label: '删除',
+            onPressed: () {
+              unawaited(_deleteRecording(filePath));
+            },
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('播放失败，请重试')));
+    }
+  }
+
+  Future<void> _deleteRecording(String filePath) async {
+    try {
+      await _audioPlaybackService.stop();
+
+      final deleted = await _audioRecorderService.deleteRecording(filePath);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(deleted ? '原始录音已从本机删除' : '没有找到可删除的录音')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('删除录音失败，请重试')));
     }
   }
 
@@ -908,6 +979,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     unawaited(_audioRecorderService.dispose());
+    unawaited(_audioPlaybackService.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();
     super.dispose();
