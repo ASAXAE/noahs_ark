@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import '../models/capture_draft.dart';
 
 import '../models/thought.dart';
 
@@ -69,6 +70,52 @@ class ArkDatabase {
       updated_at TEXT NOT NULL
     )
   ''');
+
+  Future<int> insertCaptureDraft(CaptureDraft draft) async {
+    final db = await database;
+    final values = draft.toMap()..remove('id');
+
+    return db.insert('capture_drafts', values);
+  }
+
+  Future<CaptureDraft?> getCaptureDraft(int id) async {
+    final db = await database;
+    final rows = await db.query(
+      'capture_drafts',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    return CaptureDraft.fromMap(rows.first);
+  }
+
+  Future<void> updateCaptureDraft(CaptureDraft draft) async {
+    final id = draft.id;
+
+    if (id == null) {
+      throw ArgumentError('Cannot update a CaptureDraft without an id');
+    }
+
+    final db = await database;
+    final values = draft.toMap()..remove('id');
+
+    await db.update('capture_drafts', values, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> deleteCaptureDraftByAudioPath(String audioPath) async {
+    final db = await database;
+
+    await db.delete(
+      'capture_drafts',
+      where: 'audio_path = ?',
+      whereArgs: [audioPath],
+    );
+  }
 
   Future<List<Thought>> getThoughts({
     String query = '',

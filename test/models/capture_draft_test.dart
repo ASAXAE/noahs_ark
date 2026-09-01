@@ -40,4 +40,32 @@ void main() {
     expect(map['transcript'], isNull);
     expect(map['transcription_error'], '暂时无法转写');
   });
+
+  test('CaptureDraft retry keeps original audio and clears previous error', () {
+    final failedDraft = CaptureDraft(
+      id: 9,
+      audioPath: '/local/capture/draft-9.m4a',
+      transcriptionStatus: CaptureTranscriptionStatus.failed,
+      transcriptionError: '转写失败',
+      createdAt: DateTime(2026, 9, 1, 9),
+      updatedAt: DateTime(2026, 9, 1, 9, 1),
+    );
+
+    final retryTime = DateTime(2026, 9, 1, 9, 5);
+    final retryingDraft = failedDraft.copyWith(
+      transcriptionStatus: CaptureTranscriptionStatus.transcribing,
+      clearTranscriptionError: true,
+      updatedAt: retryTime,
+    );
+
+    expect(retryingDraft.id, failedDraft.id);
+    expect(retryingDraft.audioPath, failedDraft.audioPath);
+    expect(
+      retryingDraft.transcriptionStatus,
+      CaptureTranscriptionStatus.transcribing,
+    );
+    expect(retryingDraft.transcriptionError, isNull);
+    expect(retryingDraft.createdAt, failedDraft.createdAt);
+    expect(retryingDraft.updatedAt, retryTime);
+  });
 }

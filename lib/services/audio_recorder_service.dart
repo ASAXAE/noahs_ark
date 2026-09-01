@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 class AudioRecorderService {
+  static const int _voiceSampleRate = 48000;
+
   final AudioRecorder _recorder = AudioRecorder();
 
   Future<bool> requestPermission() {
@@ -25,11 +27,15 @@ class AudioRecorderService {
 
     await audioDirectory.create(recursive: true);
 
-    final fileName = 'capture_${DateTime.now().microsecondsSinceEpoch}.m4a';
+    final fileName = 'capture_${DateTime.now().microsecondsSinceEpoch}.wav';
     final filePath = path.join(audioDirectory.path, fileName);
 
     await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc),
+      const RecordConfig(
+        encoder: AudioEncoder.wav,
+        sampleRate: _voiceSampleRate,
+        numChannels: 1,
+      ),
       path: filePath,
     );
 

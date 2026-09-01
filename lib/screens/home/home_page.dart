@@ -16,6 +16,9 @@ import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
 import '../../services/audio_recorder_service.dart';
 import '../../services/audio_playback_service.dart';
+import '../../models/capture_draft.dart';
+import '../../services/transcription_model_manager.dart';
+import '../../services/sherpa_transcription_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -28,8 +31,13 @@ class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
   final _audioRecorderService = AudioRecorderService();
   final _audioPlaybackService = AudioPlaybackService();
+  final _transcriptionModelManager = TranscriptionModelManager();
+  bool _modelDownloadInProgress = false;
   final ValueNotifier<AuthSession?> _authSessionNotifier =
       ValueNotifier<AuthSession?>(null);
+
+  SherpaTranscriptionService? _transcriptionService;
+  bool _transcriptionInProgress = false;
 
   final Set<int> _expandedThoughtIds = {};
   List<Thought> _thoughts = [];
@@ -47,6 +55,234 @@ class _HomePageState extends State<HomePage> {
     _restoreAuthSession();
   }
 
+  Future<int> _saveCaptureDraft(String audioPath) {
+    final now = DateTime.now();
+
+    final draft = CaptureDraft(
+      audioPath: audioPath,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    return ArkDatabase.instance.insertCaptureDraft(draft);
+  }
+
+  Future<void> _prepareTranscriptionModel() async {
+    if (_modelDownloadInProgress) {
+      return;
+    }
+
+    if (await _transcriptionModelManager.isInstalled()) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('离线转写模型已经准备完成')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    final shouldDownload =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('下载离线转写模型？'),
+              content: const Text(
+                '模型约 228 MB，只保存在当前设备。'
+                    '原始录音不会上传到服务器。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('下载'),
+                ),
+              ],
+            );
+          },
+        ) ??
+            false;
+
+    if (!shouldDownload || !mounted) {
+      return;
+    }
+
+    _modelDownloadInProgress = true;
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.showSnackBar(
+      const SnackBar(
+        duration: Duration(days: 1),
+        content: Row(
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 16),
+            Expanded(child: Text('正在下载离线转写模型，请保持应用开启')),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      await _transcriptionModelManager.download();
+
+      if (!mounted) return;
+
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('离线转写模型准备完成')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('模型下载失败，请检查网络后重试')),
+      );
+    } finally {
+      _modelDownloadInProgress = false;
+    }
+  }
+
+  Future<TranscriptionModelFiles?> _getTranscriptionModelFiles() async {
+    if (!await _transcriptionModelManager.isInstalled()) {
+      await _prepareTranscriptionModel();
+    }
+
+    if (!await _transcriptionModelManager.isInstalled()) {
+      return null;
+    }
+
+    return _transcriptionModelManager.getLocalFiles();
+  }
+
+  Future<void> _transcribeCaptureDraft(int draftId) async {
+    if (_transcriptionInProgress) {
+      return;
+    }
+
+    _transcriptionInProgress = true;
+    CaptureDraft? transcribingDraft;
+
+    try {
+      final draft = await ArkDatabase.instance.getCaptureDraft(draftId);
+
+      if (draft == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('没有找到对应的闪念草稿')),
+          );
+        }
+        return;
+      }
+
+      final modelFiles = await _getTranscriptionModelFiles();
+      if (modelFiles == null) {
+        return;
+      }
+
+      transcribingDraft = draft.copyWith(
+        transcriptionStatus: CaptureTranscriptionStatus.transcribing,
+        clearTranscriptionError: true,
+        updatedAt: DateTime.now(),
+      );
+
+      await ArkDatabase.instance.updateCaptureDraft(transcribingDraft);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            duration: Duration(minutes: 2),
+            content: Text('正在本地转写，原始录音会继续保留'),
+          ),
+        );
+      }
+
+      _transcriptionService ??= SherpaTranscriptionService(
+        modelPath: modelFiles.modelPath,
+        tokensPath: modelFiles.tokensPath,
+      );
+
+      final transcript = await _transcriptionService!.transcribeFile(
+        draft.audioPath,
+      );
+
+      final completedDraft = transcribingDraft.copyWith(
+        transcript: transcript,
+        transcriptionStatus: CaptureTranscriptionStatus.completed,
+        clearTranscriptionError: true,
+        updatedAt: DateTime.now(),
+      );
+
+      await ArkDatabase.instance.updateCaptureDraft(completedDraft);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('转写完成'),
+            content: SelectableText(transcript),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  unawaited(_playRecording(completedDraft.audioPath));
+                },
+                child: const Text('播放原音'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('关闭'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (error) {
+      if (transcribingDraft != null) {
+        final failedDraft = transcribingDraft.copyWith(
+          transcriptionStatus: CaptureTranscriptionStatus.failed,
+          transcriptionError: error.toString(),
+          updatedAt: DateTime.now(),
+        );
+
+        await ArkDatabase.instance.updateCaptureDraft(failedDraft);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('转写失败，原始录音仍然保留'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () {
+                unawaited(_transcribeCaptureDraft(draftId));
+              },
+            ),
+          ),
+        );
+      }
+    } finally {
+      _transcriptionInProgress = false;
+    }
+  }
+
   Future<void> _toggleRecording() async {
     if (_recordingActionInProgress) {
       return;
@@ -58,18 +294,32 @@ class _HomePageState extends State<HomePage> {
       if (_isRecording) {
         final recordingPath = await _audioRecorderService.stopRecording();
 
+        final draftId = recordingPath == null
+            ? null
+            : await _saveCaptureDraft(recordingPath);
+
         if (!mounted) return;
 
         setState(() => _isRecording = false);
 
-        if (recordingPath != null) {
+        if (recordingPath != null && draftId != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('原始录音已保存到本机'),
+              content: Row(
+                children: [
+                  const Expanded(child: Text('原始录音已保存到本机')),
+                  TextButton(
+                    onPressed: () {
+                      unawaited(_playRecording(recordingPath));
+                    },
+                    child: const Text('播放'),
+                  ),
+                ],
+              ),
               action: SnackBarAction(
-                label: '播放',
+                label: '转写',
                 onPressed: () {
-                  unawaited(_playRecording(recordingPath));
+                  unawaited(_transcribeCaptureDraft(draftId));
                 },
               ),
             ),
@@ -142,6 +392,9 @@ class _HomePageState extends State<HomePage> {
       await _audioPlaybackService.stop();
 
       final deleted = await _audioRecorderService.deleteRecording(filePath);
+      if (deleted) {
+        await ArkDatabase.instance.deleteCaptureDraftByAudioPath(filePath);
+      }
 
       if (!mounted) return;
 
@@ -980,6 +1233,8 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     unawaited(_audioRecorderService.dispose());
     unawaited(_audioPlaybackService.dispose());
+    _transcriptionService?.dispose();
+    _transcriptionModelManager.dispose();
     _searchController.dispose();
     _authSessionNotifier.dispose();
     super.dispose();

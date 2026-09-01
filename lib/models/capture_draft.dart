@@ -19,6 +19,26 @@ class CaptureDraft {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  CaptureDraft copyWith({
+    String? transcript,
+    CaptureTranscriptionStatus? transcriptionStatus,
+    String? transcriptionError,
+    bool clearTranscriptionError = false,
+    DateTime? updatedAt,
+  }) {
+    return CaptureDraft(
+      id: id,
+      audioPath: audioPath,
+      transcript: transcript ?? this.transcript,
+      transcriptionStatus: transcriptionStatus ?? this.transcriptionStatus,
+      transcriptionError: clearTranscriptionError
+          ? null
+          : transcriptionError ?? this.transcriptionError,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   Map<String, Object?> toMap() => {
     'id': id,
     'audio_path': audioPath,
