@@ -94,6 +94,14 @@ class ArkDatabase {
     return CaptureDraft.fromMap(rows.first);
   }
 
+  Future<List<CaptureDraft>> getCaptureDrafts() async {
+    final db = await database;
+
+    final rows = await db.query('capture_drafts', orderBy: 'created_at DESC');
+
+    return rows.map(CaptureDraft.fromMap).toList();
+  }
+
   Future<void> updateCaptureDraft(CaptureDraft draft) async {
     final id = draft.id;
 

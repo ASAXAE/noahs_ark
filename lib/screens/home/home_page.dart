@@ -19,6 +19,7 @@ import '../../services/audio_playback_service.dart';
 import '../../models/capture_draft.dart';
 import '../../services/transcription_model_manager.dart';
 import '../../services/sherpa_transcription_service.dart';
+import '../capture/capture_inbox_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -75,9 +76,9 @@ class _HomePageState extends State<HomePage> {
     if (await _transcriptionModelManager.isInstalled()) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('离线转写模型已经准备完成')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('离线转写模型已经准备完成')));
       return;
     }
 
@@ -91,7 +92,7 @@ class _HomePageState extends State<HomePage> {
               title: const Text('下载离线转写模型？'),
               content: const Text(
                 '模型约 228 MB，只保存在当前设备。'
-                    '原始录音不会上传到服务器。',
+                '原始录音不会上传到服务器。',
               ),
               actions: [
                 TextButton(
@@ -106,7 +107,7 @@ class _HomePageState extends State<HomePage> {
             );
           },
         ) ??
-            false;
+        false;
 
     if (!shouldDownload || !mounted) {
       return;
@@ -138,16 +139,12 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
 
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('离线转写模型准备完成')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('离线转写模型准备完成')));
     } catch (error) {
       if (!mounted) return;
 
       messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('模型下载失败，请检查网络后重试')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('模型下载失败，请检查网络后重试')));
     } finally {
       _modelDownloadInProgress = false;
     }
@@ -178,9 +175,9 @@ class _HomePageState extends State<HomePage> {
 
       if (draft == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('没有找到对应的闪念草稿')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('没有找到对应的闪念草稿')));
         }
         return;
       }
@@ -467,6 +464,15 @@ class _HomePageState extends State<HomePage> {
     );
 
     await _loadThoughts();
+  }
+
+  Future<void> _openCaptureInbox() {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            CaptureInboxPage(onRetryTranscription: _transcribeCaptureDraft),
+      ),
+    );
   }
 
   Future<void> _openEditor([Thought? thought]) async {
@@ -1002,6 +1008,11 @@ class _HomePageState extends State<HomePage> {
                         ? Theme.of(context).colorScheme.error
                         : null,
                   ),
+          ),
+          IconButton(
+            tooltip: '闪念收集箱',
+            onPressed: _openCaptureInbox,
+            icon: const Icon(Icons.inbox_outlined),
           ),
           IconButton(
             tooltip: '设置',
