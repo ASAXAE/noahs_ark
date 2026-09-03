@@ -499,7 +499,7 @@ discarded.
 - [x] Day 45: save, play and delete original audio locally
 - [x] Day 46: add on-device offline speech-to-text and failure retry handling
   while always retaining the original audio
-- [ ] Day 47: build a Flash Thought inbox for recordings and transcripts waiting
+- [x] Day 47: build a Flash Thought inbox for recordings and transcripts waiting
   to be organized
 - [ ] Day 48: convert a draft into a formal `Thought` only after user confirmation,
   with basic tests and a privacy review
