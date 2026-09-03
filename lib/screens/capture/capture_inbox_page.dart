@@ -225,17 +225,92 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
           children: [
             Row(
               children: [
-                Icon(_statusIcon(draft.transcriptionStatus)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _statusLabel(draft.transcriptionStatus),
-                    style: Theme.of(context).textTheme.titleMedium,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _statusIcon(draft.transcriptionStatus),
+                        size: 16,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSecondaryContainer,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        _statusLabel(draft.transcriptionStatus),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondaryContainer,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                const Spacer(),
                 Text(
                   _formatDate(draft.createdAt),
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: PopupMenuButton<String>(
+                    tooltip: '更多操作',
+                    padding: EdgeInsets.zero,
+
+                    color: Theme.of(context).cardColor,
+                    elevation: 10,
+                    offset: const Offset(-8, 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+
+                    icon: ImageIcon(
+                      const AssetImage(
+                        'assets/icons/more-vertical-2.png',
+                      ),
+                      size: 20,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                    onSelected: (value) {
+                      if (value == 'delete') {
+                        _deleteDraft(draft);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        enabled: _deletingAudioPath == null,
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '删除',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -246,9 +321,16 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
+                FilledButton.tonalIcon(
                   onPressed: () => _playDraft(draft),
-                  icon: const Icon(Icons.play_arrow_outlined),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  icon: const Icon(
+                    Icons.play_arrow_rounded,
+                    size: 20,
+                  ),
                   label: const Text('播放原音'),
                 ),
                 if (draft.transcriptionStatus ==
@@ -266,25 +348,6 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                         : const Icon(Icons.refresh_outlined),
                     label: Text(_retryingDraftId == draft.id ? '重试中' : '重新转写'),
                   ),
-
-                TextButton.icon(
-                  onPressed: _deletingAudioPath == null
-                      ? () => _deleteDraft(draft)
-                      : null,
-                  icon: _deletingAudioPath == draft.audioPath
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.delete_outline),
-                  label: Text(
-                    _deletingAudioPath == draft.audioPath ? '删除中' : '删除',
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                ),
               ],
             ),
           ],
