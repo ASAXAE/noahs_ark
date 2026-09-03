@@ -20,7 +20,7 @@ class ArkDatabase {
   ArkDatabase._();
 
   static final instance = ArkDatabase._();
-  static const _databaseVersion = 3;
+  static const _databaseVersion = 4;
   Database? _database;
 
   Future<Database> get database async => _database ??= await _open();
@@ -42,6 +42,11 @@ class ArkDatabase {
         }
         if (oldVersion < 3) {
           await _createCaptureDraftsTable(db);
+        }
+        if (oldVersion < 4) {
+          await db.execute(
+            'ALTER TABLE capture_drafts ADD COLUMN converted_thought_id INTEGER',
+          );
         }
       },
     );
@@ -66,6 +71,7 @@ class ArkDatabase {
       transcript TEXT,
       transcription_status TEXT NOT NULL DEFAULT 'pending',
       transcription_error TEXT,
+      converted_thought_id INTEGER,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -115,6 +121,52 @@ class ArkDatabase {
     await db.update('capture_drafts', values, where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> convertCaptureDraftToThought({
+    required int draftId,
+    required Thought thought,
+  }) async {
+    if (thought.id != null) {
+      throw ArgumentError('A converted Thought must not already have an id');
+    }
+
+    final db = await database;
+
+    await db.transaction((transaction) async {
+      final eligibleDrafts = await transaction.query(
+        'capture_drafts',
+        columns: ['id'],
+        where:
+            'id = ? AND transcription_status = ? '
+            'AND converted_thought_id IS NULL',
+        whereArgs: [draftId, CaptureTranscriptionStatus.completed.name],
+        limit: 1,
+      );
+
+      if (eligibleDrafts.isEmpty) {
+        throw StateError(
+          'CaptureDraft is missing, unfinished, or already converted',
+        );
+      }
+
+      final thoughtValues = thought.toMap()..remove('id');
+      final thoughtId = await transaction.insert('thoughts', thoughtValues);
+
+      final updatedCount = await transaction.update(
+        'capture_drafts',
+        {
+          'converted_thought_id': thoughtId,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ? AND converted_thought_id IS NULL',
+        whereArgs: [draftId],
+      );
+
+      if (updatedCount != 1) {
+        throw StateError('Failed to link CaptureDraft to Thought');
+      }
+    });
+  }
+
   Future<void> deleteCaptureDraftByAudioPath(String audioPath) async {
     final db = await database;
 
@@ -123,6 +175,23 @@ class ArkDatabase {
       where: 'audio_path = ?',
       whereArgs: [audioPath],
     );
+  }
+
+  Future<Thought?> getThought(int id) async {
+    final db = await database;
+
+    final rows = await db.query(
+      'thoughts',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    return Thought.fromMap(rows.first);
   }
 
   Future<List<Thought>> getThoughts({
@@ -171,7 +240,20 @@ class ArkDatabase {
 
   Future<void> deleteThought(int id) async {
     final db = await database;
-    await db.delete('thoughts', where: 'id = ?', whereArgs: [id]);
+
+    await db.transaction((transaction) async {
+      await transaction.update(
+        'capture_drafts',
+        {
+          'converted_thought_id': null,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'converted_thought_id = ?',
+        whereArgs: [id],
+      );
+
+      await transaction.delete('thoughts', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<BackupImportResult> importThoughts(List<Thought> thoughts) async {

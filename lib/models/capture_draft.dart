@@ -7,6 +7,7 @@ class CaptureDraft {
     this.transcript,
     this.transcriptionStatus = CaptureTranscriptionStatus.pending,
     this.transcriptionError,
+    this.convertedThoughtId,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -16,6 +17,7 @@ class CaptureDraft {
   final String? transcript;
   final CaptureTranscriptionStatus transcriptionStatus;
   final String? transcriptionError;
+  final int? convertedThoughtId;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,6 +25,7 @@ class CaptureDraft {
     String? transcript,
     CaptureTranscriptionStatus? transcriptionStatus,
     String? transcriptionError,
+    int? convertedThoughtId,
     bool clearTranscriptionError = false,
     DateTime? updatedAt,
   }) {
@@ -34,6 +37,7 @@ class CaptureDraft {
       transcriptionError: clearTranscriptionError
           ? null
           : transcriptionError ?? this.transcriptionError,
+      convertedThoughtId: convertedThoughtId ?? this.convertedThoughtId,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -45,6 +49,7 @@ class CaptureDraft {
     'transcript': transcript,
     'transcription_status': transcriptionStatus.name,
     'transcription_error': transcriptionError,
+    'converted_thought_id': convertedThoughtId,
     'created_at': createdAt.toIso8601String(),
     'updated_at': updatedAt.toIso8601String(),
   };
@@ -57,6 +62,7 @@ class CaptureDraft {
       map['transcription_status'] as String,
     ),
     transcriptionError: map['transcription_error'] as String?,
+    convertedThoughtId: map['converted_thought_id'] as int?,
     createdAt: DateTime.parse(map['created_at'] as String),
     updatedAt: DateTime.parse(map['updated_at'] as String),
   );

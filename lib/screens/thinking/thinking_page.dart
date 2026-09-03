@@ -4,10 +4,18 @@ import '../../database/ark_database.dart';
 import '../../models/thought.dart';
 
 class ThinkingPage extends StatefulWidget {
-  const ThinkingPage({super.key, this.thought, this.initialTag});
+  const ThinkingPage({
+    super.key,
+    this.thought,
+    this.initialTag,
+    this.initialContent,
+    this.onSave,
+  });
 
   final Thought? thought;
   final String? initialTag;
+  final String? initialContent;
+  final Future<void> Function(Thought thought)? onSave;
 
   @override
   State<ThinkingPage> createState() => _ThinkingPageState();
@@ -23,7 +31,9 @@ class _ThinkingPageState extends State<ThinkingPage> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.thought?.content ?? '');
+    _controller = TextEditingController(
+      text: widget.thought?.content ?? widget.initialContent ?? '',
+    );
     _titleController = TextEditingController(text: widget.thought?.title ?? '');
     final requestedTag = widget.thought?.tag ?? widget.initialTag;
 
@@ -50,16 +60,19 @@ class _ThinkingPageState extends State<ThinkingPage> {
 
   Future<void> _save() async {
     final content = _formatParagraphs(_controller.text.trim());
+
     if (content.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('请先写下一些内容')));
       return;
     }
+
     setState(() => _saving = true);
-    final now = DateTime.now();
-    await ArkDatabase.instance.saveThought(
-      Thought(
+
+    try {
+      final now = DateTime.now();
+      final thought = Thought(
         id: widget.thought?.id,
         title: _titleController.text.trim(),
         content: content,
@@ -67,10 +80,27 @@ class _ThinkingPageState extends State<ThinkingPage> {
         isFavorite: _isFavorite,
         createdAt: widget.thought?.createdAt ?? now,
         updatedAt: now,
-      ),
-    );
-    if (!mounted) return;
-    Navigator.pop(context, true);
+      );
+
+      final onSave = widget.onSave;
+
+      if (onSave == null) {
+        await ArkDatabase.instance.saveThought(thought);
+      } else {
+        await onSave(thought);
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _saving = false);
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存失败，请重试')));
+    }
   }
 
   @override

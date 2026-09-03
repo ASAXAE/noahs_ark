@@ -8,6 +8,7 @@ void main() {
       audioPath: '/local/capture/draft-7.m4a',
       transcript: '突然想到的内容',
       transcriptionStatus: CaptureTranscriptionStatus.completed,
+      convertedThoughtId: 42,
       createdAt: DateTime(2026, 8, 29, 9),
       updatedAt: DateTime(2026, 8, 29, 9, 5),
     );
@@ -19,6 +20,7 @@ void main() {
     expect(restored.transcript, original.transcript);
     expect(restored.transcriptionStatus, original.transcriptionStatus);
     expect(restored.transcriptionError, isNull);
+    expect(restored.convertedThoughtId, original.convertedThoughtId);
     expect(restored.createdAt, original.createdAt);
     expect(restored.updatedAt, original.updatedAt);
   });

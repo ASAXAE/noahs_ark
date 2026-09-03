@@ -44,6 +44,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   that explains local records remain on the device
 - Branded Android adaptive launcher icon
 - JSON serialization, backup parsing and model tests
+- Local Flash Thought inbox with original-audio playback and offline transcription
+- Explicit transactional conversion from `CaptureDraft` to a linked `Thought`
 
 ### Experimental backend
 
@@ -501,7 +503,7 @@ discarded.
   while always retaining the original audio
 - [x] Day 47: build a Flash Thought inbox for recordings and transcripts waiting
   to be organized
-- [ ] Day 48: convert a draft into a formal `Thought` only after user confirmation,
+- [x] Day 48: convert a draft into a formal `Thought` only after user confirmation,
   with basic tests and a privacy review
 - [ ] Day 49: split `HomePage` responsibilities without changing behavior. Move
   test-server Thought CRUD into a dedicated debug page, extract reusable home UI,
@@ -557,6 +559,14 @@ audio with generated content, or create a formal `Thought` without explicit user
 confirmation. Local Thoughts, backups and original audio must never upload
 automatically. AI organization remains deferred until its privacy and
 third-party-service rules are explicitly defined.
+
+Day 48 privacy review confirms that conversion stays inside local SQLite,
+requires both confirmation and an explicit save action, retains the original
+audio, and makes no HTTP request. Deleting the converted `Thought` clears only
+the local relationship so its `CaptureDraft` and audio remain available for
+reorganization. Manual emulator checks covered cancellation, leaving without
+saving, conversion, linked record opening, original-audio retention and
+unlink-on-delete. The focused `CaptureDraft` model test also passes.
 
 ### Product backlog
 

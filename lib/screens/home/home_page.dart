@@ -466,13 +466,16 @@ class _HomePageState extends State<HomePage> {
     await _loadThoughts();
   }
 
-  Future<void> _openCaptureInbox() {
-    return Navigator.of(context).push<void>(
+  Future<void> _openCaptureInbox() async {
+    await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) =>
             CaptureInboxPage(onRetryTranscription: _transcribeCaptureDraft),
       ),
     );
+
+    if (!mounted) return;
+    await _loadThoughts();
   }
 
   Future<void> _openEditor([Thought? thought]) async {

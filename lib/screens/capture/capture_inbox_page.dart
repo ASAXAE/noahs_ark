@@ -4,6 +4,8 @@ import '../../database/ark_database.dart';
 import '../../models/capture_draft.dart';
 import '../../services/audio_playback_service.dart';
 import '../../services/audio_recorder_service.dart';
+import '../thinking/thinking_page.dart';
+import '../detail/thought_detail_page.dart';
 
 class CaptureInboxPage extends StatefulWidget {
   const CaptureInboxPage({super.key, required this.onRetryTranscription});
@@ -70,6 +72,95 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
       if (mounted) {
         setState(() => _retryingDraftId = null);
       }
+    }
+  }
+
+  Future<void> _organizeDraft(CaptureDraft draft) async {
+    final draftId = draft.id;
+    final transcript = draft.transcript?.trim();
+
+    if (draftId == null ||
+        transcript == null ||
+        transcript.isEmpty ||
+        draft.convertedThoughtId != null) {
+      return;
+    }
+
+    final confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('整理为正式记录？'),
+              content: const Text(
+                '转写文字会先进入编辑页。'
+                '只有你点击“保存记录”后才会创建正式记录；'
+                '原始录音仍保留在本机，也不会上传。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('继续整理'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) return;
+
+    final converted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ThinkingPage(
+          initialContent: transcript,
+          onSave: (thought) {
+            return ArkDatabase.instance.convertCaptureDraftToThought(
+              draftId: draftId,
+              thought: thought,
+            );
+          },
+        ),
+      ),
+    );
+
+    if (converted != true || !mounted) return;
+
+    await _loadDrafts();
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为正式记录，原始录音仍保留在本机')));
+  }
+
+  Future<void> _openConvertedThought(CaptureDraft draft) async {
+    final thoughtId = draft.convertedThoughtId;
+
+    if (thoughtId == null) return;
+
+    final thought = await ArkDatabase.instance.getThought(thoughtId);
+
+    if (!mounted) return;
+
+    if (thought == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('找不到对应的正式记录')));
+      return;
+    }
+
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => ThoughtDetailPage(thought: thought)),
+    );
+
+    if (changed == true && mounted) {
+      await _loadDrafts();
     }
   }
 
@@ -246,7 +337,7 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _statusLabel(draft.transcriptionStatus),
+                        _statusLabel(draft),
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Theme.of(
@@ -278,9 +369,7 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                     ),
 
                     icon: ImageIcon(
-                      const AssetImage(
-                        'assets/icons/more-vertical-2.png',
-                      ),
+                      const AssetImage('assets/icons/more-vertical-2.png'),
                       size: 20,
                       color: Theme.of(context).colorScheme.outline,
                     ),
@@ -327,14 +416,13 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                     minimumSize: const Size(0, 42),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
-                  icon: const Icon(
-                    Icons.play_arrow_rounded,
-                    size: 20,
-                  ),
+                  icon: const Icon(Icons.play_arrow_rounded, size: 20),
                   label: const Text('播放原音'),
                 ),
                 if (draft.transcriptionStatus ==
-                    CaptureTranscriptionStatus.failed)
+                        CaptureTranscriptionStatus.pending ||
+                    draft.transcriptionStatus ==
+                        CaptureTranscriptionStatus.failed)
                   FilledButton.icon(
                     onPressed: _retryingDraftId == null
                         ? () => _retryDraft(draft)
@@ -346,7 +434,32 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.refresh_outlined),
-                    label: Text(_retryingDraftId == draft.id ? '重试中' : '重新转写'),
+                    label: Text(
+                      _retryingDraftId == draft.id
+                          ? '转写中'
+                          : draft.transcriptionStatus ==
+                                CaptureTranscriptionStatus.pending
+                          ? '开始转写'
+                          : '重新转写',
+                    ),
+                  ),
+                if (draft.transcriptionStatus ==
+                        CaptureTranscriptionStatus.completed &&
+                    draft.convertedThoughtId == null)
+                  FilledButton.icon(
+                    onPressed: () => _organizeDraft(draft),
+                    icon: const Icon(Icons.auto_stories_outlined),
+                    label: const Text('整理为记录'),
+                  ),
+                if (draft.convertedThoughtId != null)
+                  FilledButton.icon(
+                    onPressed: () => _openConvertedThought(draft),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 42),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                    ),
+                    icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                    label: const Text('查看正式记录'),
                   ),
               ],
             ),
@@ -372,8 +485,12 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     }
   }
 
-  String _statusLabel(CaptureTranscriptionStatus status) {
-    switch (status) {
+  String _statusLabel(CaptureDraft draft) {
+    if (draft.convertedThoughtId != null) {
+      return '已整理';
+    }
+
+    switch (draft.transcriptionStatus) {
       case CaptureTranscriptionStatus.pending:
         return '等待转写';
       case CaptureTranscriptionStatus.transcribing:
