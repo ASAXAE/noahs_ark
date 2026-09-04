@@ -8,9 +8,14 @@ import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
 
 class CaptureInboxPage extends StatefulWidget {
-  const CaptureInboxPage({super.key, required this.onRetryTranscription});
+  const CaptureInboxPage({
+    super.key,
+    required this.onRetryTranscription,
+    this.refreshVersion = 0,
+  });
 
   final Future<void> Function(int draftId) onRetryTranscription;
+  final int refreshVersion;
 
   @override
   State<CaptureInboxPage> createState() => _CaptureInboxPageState();
@@ -29,6 +34,19 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   void initState() {
     super.initState();
     _loadDrafts();
+  }
+
+  @override
+  void didUpdateWidget(covariant CaptureInboxPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.refreshVersion != widget.refreshVersion) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _loadDrafts();
+        }
+      });
+    }
   }
 
   @override

@@ -20,6 +20,11 @@ import '../../models/capture_draft.dart';
 import '../../services/transcription_model_manager.dart';
 import '../../services/sherpa_transcription_service.dart';
 import '../capture/capture_inbox_page.dart';
+import '../shell/app_shell.dart';
+import 'widgets/home_hero.dart';
+import 'widgets/home_filters.dart';
+import 'widgets/home_empty_state.dart';
+import '../debug/server_thoughts_debug_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,6 +53,7 @@ class _HomePageState extends State<HomePage> {
   String? _selectedTag;
   bool _isRecording = false;
   bool _recordingActionInProgress = false;
+  int _captureInboxRefreshVersion = 0;
 
   @override
   void initState() {
@@ -56,7 +62,7 @@ class _HomePageState extends State<HomePage> {
     _restoreAuthSession();
   }
 
-  Future<int> _saveCaptureDraft(String audioPath) {
+  Future<int> _saveCaptureDraft(String audioPath) async {
     final now = DateTime.now();
 
     final draft = CaptureDraft(
@@ -65,7 +71,15 @@ class _HomePageState extends State<HomePage> {
       updatedAt: now,
     );
 
-    return ArkDatabase.instance.insertCaptureDraft(draft);
+    final draftId = await ArkDatabase.instance.insertCaptureDraft(draft);
+
+    if (mounted) {
+      setState(() {
+        _captureInboxRefreshVersion++;
+      });
+    }
+
+    return draftId;
   }
 
   Future<void> _prepareTranscriptionModel() async {
@@ -277,6 +291,12 @@ class _HomePageState extends State<HomePage> {
       }
     } finally {
       _transcriptionInProgress = false;
+
+      if (mounted && transcribingDraft != null) {
+        setState(() {
+          _captureInboxRefreshVersion++;
+        });
+      }
     }
   }
 
@@ -450,32 +470,6 @@ class _HomePageState extends State<HomePage> {
       _thoughts = thoughts;
       _loading = false;
     });
-  }
-
-  Future<void> _openSettings() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => SettingsPage(
-          authSessionNotifier: _authSessionNotifier,
-          onExportBackup: _exportBackup,
-          onRestoreBackup: _previewBackup,
-        ),
-      ),
-    );
-
-    await _loadThoughts();
-  }
-
-  Future<void> _openCaptureInbox() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) =>
-            CaptureInboxPage(onRetryTranscription: _transcribeCaptureDraft),
-      ),
-    );
-
-    if (!mounted) return;
-    await _loadThoughts();
   }
 
   Future<void> _openEditor([Thought? thought]) async {
@@ -677,280 +671,10 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _testApiConnection() async {
-    try {
-      final serverThoughts = await ApiService().fetchThoughts();
-
-      if (!mounted) return;
-
-      await showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (context) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-              child: Column(
-                children: [
-                  Text('服务器记录', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 16),
-
-                  Expanded(
-                    child: serverThoughts.isEmpty
-                        ? const Center(child: Text('服务器还没有记录'))
-                        : ListView.separated(
-                            itemCount: serverThoughts.length,
-                            separatorBuilder: (_, _) => const Divider(),
-                            itemBuilder: (_, index) {
-                              final thought = serverThoughts[index];
-
-                              return ListTile(
-                                title: Text(
-                                  thought.title.isEmpty ? '无标题' : thought.title,
-                                ),
-                                subtitle: Text(thought.content),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(thought.tag),
-                                    IconButton(
-                                      tooltip: '编辑服务器记录',
-                                      icon: const Icon(Icons.edit_outlined),
-                                      onPressed: () {
-                                        _editServerThought(thought);
-                                      },
-                                    ),
-                                    IconButton(
-                                      tooltip: '删除服务器记录',
-                                      icon: const Icon(Icons.delete_outline),
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        _deleteServerThought(thought);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _createServerTestThought();
-                      },
-                      icon: const Icon(Icons.cloud_upload_outlined),
-                      label: const Text('创建服务器测试记录'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('获取服务器记录失败：$error')));
-    }
-  }
-
-  Future<void> _createServerTestThought() async {
-    try {
-      final createdThought = await ApiService().createTestThought();
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('服务器记录创建成功：${createdThought.title}')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('创建服务器记录失败：$error')));
-    }
-  }
-
-  Future<void> _editServerThought(Thought thought) async {
-    var editedTitle = thought.title;
-    var editedContent = thought.content;
-    var editedTag = thought.tag;
-    String? validationMessage;
-
-    final updatedThought = await showDialog<Thought>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('编辑服务器记录'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      initialValue: thought.title,
-                      onChanged: (value) {
-                        editedTitle = value;
-                      },
-                      decoration: const InputDecoration(labelText: '标题'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      initialValue: thought.content,
-                      onChanged: (value) {
-                        editedContent = value;
-                      },
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: '正文',
-                        alignLabelWithHint: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      initialValue: thought.tag,
-                      onChanged: (value) {
-                        editedTag = value;
-                      },
-                      decoration: const InputDecoration(labelText: '标签'),
-                    ),
-                    if (validationMessage != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        validationMessage!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    if (editedContent.trim().isEmpty ||
-                        editedTag.trim().isEmpty) {
-                      setDialogState(() {
-                        validationMessage = '正文和标签不能为空';
-                      });
-                      return;
-                    }
-
-                    Navigator.pop(
-                      dialogContext,
-                      thought.copyWith(
-                        title: editedTitle.trim(),
-                        content: editedContent.trim(),
-                        tag: editedTag.trim(),
-                      ),
-                    );
-                  },
-                  child: const Text('保存'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+  Future<void> _openServerThoughtsDebugPage() {
+    return Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const ServerThoughtsDebugPage()),
     );
-
-    if (updatedThought == null) {
-      return;
-    }
-
-    try {
-      final result = await ApiService().updateThought(updatedThought);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('服务器记录修改成功：${result.title}')));
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('修改服务器记录失败：$error')));
-    }
-  }
-
-  Future<void> _deleteServerThought(Thought thought) async {
-    final id = thought.id;
-
-    if (id == null) {
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('删除服务器记录？'),
-          content: Text(
-            '确定删除“${thought.title.isEmpty ? '无标题' : thought.title}”吗？',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('删除'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return;
-    }
-
-    try {
-      await ApiService().deleteThought(id);
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('服务器记录已删除')));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('删除服务器记录失败：$error')));
-    }
-  }
-
-  bool get _hasActiveFilters {
-    return _searchController.text.trim().isNotEmpty ||
-        _selectedTag != null ||
-        _favoritesOnly;
   }
 
   void _resetFilters() {
@@ -985,8 +709,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildArkPage(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -1012,20 +735,10 @@ class _HomePageState extends State<HomePage> {
                         : null,
                   ),
           ),
-          IconButton(
-            tooltip: '闪念收集箱',
-            onPressed: _openCaptureInbox,
-            icon: const Icon(Icons.inbox_outlined),
-          ),
-          IconButton(
-            tooltip: '设置',
-            onPressed: _openSettings,
-            icon: const Icon(Icons.settings_outlined),
-          ),
           if (kDebugMode)
             IconButton(
               tooltip: '测试后端连接',
-              onPressed: _testApiConnection,
+              onPressed: _openServerThoughtsDebugPage,
               icon: const Icon(Icons.cloud_outlined),
             ),
           IconButton(
@@ -1052,7 +765,31 @@ class _HomePageState extends State<HomePage> {
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 sliver: SliverList.list(
-                  children: [_hero(), const SizedBox(height: 20), _filters()],
+                  children: [
+                    const HomeHero(),
+                    const SizedBox(height: 20),
+                    HomeFilters(
+                      searchController: _searchController,
+                      hasSearchText: _hasSearchText,
+                      selectedTag: _selectedTag,
+                      tags: Thought.tags,
+                      onSearchChanged: (value) {
+                        setState(() {
+                          _hasSearchText = value.trim().isNotEmpty;
+                        });
+
+                        _loadThoughts();
+                      },
+                      onClearSearch: _clearSearch,
+                      onTagSelected: (tag) {
+                        setState(() {
+                          _selectedTag = tag;
+                        });
+
+                        _loadThoughts();
+                      },
+                    ),
+                  ],
                 ),
               ),
               if (_loading)
@@ -1060,7 +797,16 @@ class _HomePageState extends State<HomePage> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else if (_thoughts.isEmpty)
-                SliverFillRemaining(hasScrollBody: false, child: _emptyState())
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: HomeEmptyState(
+                    searchText: _searchController.text,
+                    selectedTag: _selectedTag,
+                    favoritesOnly: _favoritesOnly,
+                    onResetFilters: _resetFilters,
+                    onCreateThought: _openEditor,
+                  ),
+                )
               else
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
@@ -1095,150 +841,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _hero() => Container(
-    padding: const EdgeInsets.all(22),
-    decoration: BoxDecoration(
-      color: const Color(0xFF426B5A),
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Row(
-      children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('今日思考', style: TextStyle(color: Colors.white70)),
-              SizedBox(height: 6),
-              Text(
-                '把重要的想法留下来',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-        CircleAvatar(
-          radius: 28,
-          backgroundColor: Colors.white.withValues(alpha: 0.15),
-          child: const Icon(Icons.sailing, color: Colors.white, size: 30),
-        ),
-      ],
-    ),
-  );
-
-  Widget _filters() => Column(
-    children: [
-      TextField(
-        controller: _searchController,
-        onChanged: (value) {
-          setState(() {
-            _hasSearchText = value.trim().isNotEmpty;
-          });
-
-          _loadThoughts();
-        },
-        decoration: InputDecoration(
-          prefixIcon: const Icon(Icons.search),
-          hintText: '搜索记录',
-          suffixIcon: _hasSearchText
-              ? IconButton(
-                  tooltip: '清空搜索',
-                  onPressed: _clearSearch,
-                  icon: const Icon(Icons.close),
-                )
-              : null,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    return AppShell(
+      arkPage: _buildArkPage(context),
+      capturePage: CaptureInboxPage(
+        onRetryTranscription: _transcribeCaptureDraft,
+        refreshVersion: _captureInboxRefreshVersion,
       ),
-      const SizedBox(height: 10),
-      SizedBox(
-        height: 38,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          children: [
-            ChoiceChip(
-              label: const Text('全部'),
-              selected: _selectedTag == null,
-              onSelected: (_) {
-                setState(() => _selectedTag = null);
-                _loadThoughts();
-              },
-            ),
-            for (final tag in Thought.tags) ...[
-              const SizedBox(width: 8),
-              ChoiceChip(
-                label: Text(tag),
-                selected: _selectedTag == tag,
-                onSelected: (_) {
-                  setState(() => _selectedTag = tag);
-                  _loadThoughts();
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    ],
-  );
-
-  Widget _emptyState() {
-    String title;
-    String description;
-    IconData icon;
-
-    if (_searchController.text.trim().isNotEmpty) {
-      title = '没有找到相关记录';
-      description = '试试修改搜索内容';
-      icon = Icons.search_off_outlined;
-    } else if (_selectedTag != null) {
-      title = '“$_selectedTag”标签还没有记录';
-      description = '你可以写下一条属于这个标签的想法';
-      icon = Icons.label_outline;
-    } else if (_favoritesOnly) {
-      title = '还没有收藏记录';
-      description = '收藏重要的想法后，它们会出现在这里';
-      icon = Icons.favorite_border;
-    } else {
-      title = '方舟还是空的';
-      description = '写下此刻值得保存的想法';
-      icon = Icons.auto_stories_outlined;
-    }
-
-    final hasActiveFilters = _hasActiveFilters;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.outline),
-            ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: hasActiveFilters ? _resetFilters : _openEditor,
-              icon: Icon(
-                hasActiveFilters
-                    ? Icons.filter_alt_off_outlined
-                    : Icons.edit_outlined,
-              ),
-              label: Text(hasActiveFilters ? '查看全部记录' : '写下第一条记录'),
-            ),
-          ],
-        ),
+      profilePage: SettingsPage(
+        authSessionNotifier: _authSessionNotifier,
+        onExportBackup: _exportBackup,
+        onRestoreBackup: _previewBackup,
       ),
     );
   }

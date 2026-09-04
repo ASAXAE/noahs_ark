@@ -505,13 +505,14 @@ discarded.
   to be organized
 - [x] Day 48: convert a draft into a formal `Thought` only after user confirmation,
   with basic tests and a privacy review
-- [ ] Day 49: split `HomePage` responsibilities without changing behavior. Move
-  test-server Thought CRUD into a dedicated debug page, extract reusable home UI,
-  and keep only the local Thought list, search, tags, favorites and editing entry
-  in the production Ark page. Do not introduce Bloc, Provider or Riverpod
-- [ ] Day 50: build a Material 3 `AppShell` with Ark, Flash Thought and My
+- [x] Day 49: build a Material 3 `AppShell` with Ark, Flash Thought and My
   destinations while preserving all three page states. My owns account, backup,
-  privacy and about. Do not add a separate AI destination
+  privacy and about. Keep AI inside the existing capture and Thought flows.
+  Refresh the persistent inbox after capture or transcription changes, extract
+  reusable home UI and move test-server Thought CRUD to a dedicated debug page
+- [ ] Day 50: continue reducing `HomePage` without changing behavior. Move backup
+  management under Settings and separate capture/transcription coordination from
+  the Ark page before choosing Provider, Bloc or another state-management approach
 - [ ] Day 51: run regression across the Flash Thought MVP, `HomePage` split and
   navigation. Verify permission denial, recording interruption, restart recovery,
   transcription failure, audio deletion, confirmed conversion and navigation
