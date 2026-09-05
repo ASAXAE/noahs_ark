@@ -16,6 +16,18 @@ class AudioPlaybackService {
     return true;
   }
 
+  Future<void> pause() {
+    return _player.pause();
+  }
+
+  Future<void> resume() {
+    return _player.resume();
+  }
+
+  Stream<void> get onPlayerComplete {
+    return _player.onPlayerComplete;
+  }
+
   Future<void> stop() {
     return _player.stop();
   }

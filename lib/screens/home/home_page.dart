@@ -7,23 +7,19 @@ import '../../database/ark_database.dart';
 import '../../models/thought.dart';
 import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
-import '../../widgets/thought_card.dart';
 import '../../services/api_service.dart';
-import '../../services/backup_service.dart';
 import '../settings/settings_page.dart';
 import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
-import '../../services/audio_recorder_service.dart';
-import '../../services/audio_playback_service.dart';
-import '../../models/capture_draft.dart';
 import '../../services/transcription_model_manager.dart';
-import '../../services/sherpa_transcription_service.dart';
+import '../../controllers/capture_controller.dart';
 import '../capture/capture_inbox_page.dart';
 import '../shell/app_shell.dart';
 import 'widgets/home_hero.dart';
 import 'widgets/home_filters.dart';
 import 'widgets/home_empty_state.dart';
+import 'widgets/home_thought_list.dart';
 import '../debug/server_thoughts_debug_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -35,14 +31,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
-  final _audioRecorderService = AudioRecorderService();
-  final _audioPlaybackService = AudioPlaybackService();
-  final _transcriptionModelManager = TranscriptionModelManager();
+  final _captureController = CaptureController();
   bool _modelDownloadInProgress = false;
   final ValueNotifier<AuthSession?> _authSessionNotifier =
       ValueNotifier<AuthSession?>(null);
 
-  SherpaTranscriptionService? _transcriptionService;
   bool _transcriptionInProgress = false;
 
   final Set<int> _expandedThoughtIds = {};
@@ -63,15 +56,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<int> _saveCaptureDraft(String audioPath) async {
-    final now = DateTime.now();
-
-    final draft = CaptureDraft(
-      audioPath: audioPath,
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    final draftId = await ArkDatabase.instance.insertCaptureDraft(draft);
+    final draftId = await _captureController.saveDraft(audioPath);
 
     if (mounted) {
       setState(() {
@@ -87,7 +72,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    if (await _transcriptionModelManager.isInstalled()) {
+    if (await _captureController.isTranscriptionModelInstalled()) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(
@@ -148,7 +133,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     try {
-      await _transcriptionModelManager.download();
+      await _captureController.downloadTranscriptionModel();
 
       if (!mounted) return;
 
@@ -165,15 +150,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<TranscriptionModelFiles?> _getTranscriptionModelFiles() async {
-    if (!await _transcriptionModelManager.isInstalled()) {
+    if (!await _captureController.isTranscriptionModelInstalled()) {
       await _prepareTranscriptionModel();
     }
 
-    if (!await _transcriptionModelManager.isInstalled()) {
+    if (!await _captureController.isTranscriptionModelInstalled()) {
       return null;
     }
 
-    return _transcriptionModelManager.getLocalFiles();
+    return _captureController.getTranscriptionModelFiles();
   }
 
   Future<void> _transcribeCaptureDraft(int draftId) async {
@@ -182,7 +167,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     _transcriptionInProgress = true;
-    CaptureDraft? transcribingDraft;
+    var transcriptionStarted = false;
 
     try {
       final draft = await ArkDatabase.instance.getCaptureDraft(draftId);
@@ -201,82 +186,45 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      transcribingDraft = draft.copyWith(
-        transcriptionStatus: CaptureTranscriptionStatus.transcribing,
-        clearTranscriptionError: true,
-        updatedAt: DateTime.now(),
+      transcriptionStarted = true;
+
+      final completedDraft = await _captureController.transcribeDraft(
+        draft: draft,
+        modelFiles: modelFiles,
       );
 
-      await ArkDatabase.instance.updateCaptureDraft(transcribingDraft);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            duration: Duration(minutes: 2),
-            content: Text('正在本地转写，原始录音会继续保留'),
-          ),
-        );
-      }
-
-      _transcriptionService ??= SherpaTranscriptionService(
-        modelPath: modelFiles.modelPath,
-        tokensPath: modelFiles.tokensPath,
-      );
-
-      final transcript = await _transcriptionService!.transcribeFile(
-        draft.audioPath,
-      );
-
-      final completedDraft = transcribingDraft.copyWith(
-        transcript: transcript,
-        transcriptionStatus: CaptureTranscriptionStatus.completed,
-        clearTranscriptionError: true,
-        updatedAt: DateTime.now(),
-      );
-
-      await ArkDatabase.instance.updateCaptureDraft(completedDraft);
+      final transcript = completedDraft.transcript!;
 
       if (!mounted) {
         return;
       }
 
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('转写完成'),
-            content: SelectableText(transcript),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext);
-                  unawaited(_playRecording(completedDraft.audioPath));
-                },
-                child: const Text('播放原音'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('关闭'),
-              ),
-            ],
-          );
-        },
+      unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('转写完成'),
+              content: SelectableText(transcript),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(dialogContext);
+                    unawaited(_playRecording(completedDraft.audioPath));
+                  },
+                  child: const Text('播放原音'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('关闭'),
+                ),
+              ],
+            );
+          },
+        ),
       );
     } catch (error) {
-      if (transcribingDraft != null) {
-        final failedDraft = transcribingDraft.copyWith(
-          transcriptionStatus: CaptureTranscriptionStatus.failed,
-          transcriptionError: error.toString(),
-          updatedAt: DateTime.now(),
-        );
-
-        await ArkDatabase.instance.updateCaptureDraft(failedDraft);
-      }
-
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('转写失败，原始录音仍然保留'),
@@ -292,7 +240,7 @@ class _HomePageState extends State<HomePage> {
     } finally {
       _transcriptionInProgress = false;
 
-      if (mounted && transcribingDraft != null) {
+      if (mounted && transcriptionStarted) {
         setState(() {
           _captureInboxRefreshVersion++;
         });
@@ -309,44 +257,20 @@ class _HomePageState extends State<HomePage> {
 
     try {
       if (_isRecording) {
-        final recordingPath = await _audioRecorderService.stopRecording();
+        final recordingPath = await _captureController.stopRecording();
 
-        final draftId = recordingPath == null
-            ? null
-            : await _saveCaptureDraft(recordingPath);
+        if (recordingPath != null) {
+          await _saveCaptureDraft(recordingPath);
+        }
 
         if (!mounted) return;
 
         setState(() => _isRecording = false);
 
-        if (recordingPath != null && draftId != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Expanded(child: Text('原始录音已保存到本机')),
-                  TextButton(
-                    onPressed: () {
-                      unawaited(_playRecording(recordingPath));
-                    },
-                    child: const Text('播放'),
-                  ),
-                ],
-              ),
-              action: SnackBarAction(
-                label: '转写',
-                onPressed: () {
-                  unawaited(_transcribeCaptureDraft(draftId));
-                },
-              ),
-            ),
-          );
-        }
-
         return;
       }
 
-      final recordingPath = await _audioRecorderService.startRecording();
+      final recordingPath = await _captureController.startRecording();
 
       if (!mounted) return;
 
@@ -373,7 +297,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _playRecording(String filePath) async {
     try {
-      final didStartPlaying = await _audioPlaybackService.play(filePath);
+      final didStartPlaying = await _captureController.playRecording(filePath);
 
       if (!mounted) return;
 
@@ -406,12 +330,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _deleteRecording(String filePath) async {
     try {
-      await _audioPlaybackService.stop();
-
-      final deleted = await _audioRecorderService.deleteRecording(filePath);
-      if (deleted) {
-        await ArkDatabase.instance.deleteCaptureDraftByAudioPath(filePath);
-      }
+      final deleted = await _captureController.deleteRecording(filePath);
 
       if (!mounted) return;
 
@@ -499,119 +418,6 @@ class _HomePageState extends State<HomePage> {
       thought.copyWith(isFavorite: !thought.isFavorite),
     );
     await _loadThoughts();
-  }
-
-  Future<void> _exportBackup() async {
-    try {
-      final thoughts = await ArkDatabase.instance.getThoughts();
-
-      if (!mounted) {
-        return;
-      }
-
-      if (thoughts.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('还没有可以导出的记录')));
-        return;
-      }
-
-      await BackupService().exportThoughts(thoughts);
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导出失败：$error')));
-    }
-  }
-
-  Future<void> _previewBackup() async {
-    try {
-      final backup = await BackupService().pickAndReadBackup();
-
-      if (backup == null || !mounted) {
-        return;
-      }
-
-      final localExportTime = backup.exportedAt.toLocal();
-      final displayTime = localExportTime.toString().split('.').first;
-
-      final shouldRestore = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('备份文件验证成功'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('记录数量：${backup.thoughts.length}'),
-                const SizedBox(height: 8),
-                Text('导出时间：$displayTime'),
-                const SizedBox(height: 16),
-                const Text('恢复不会删除现有记录，已经存在的相同记录会被跳过。'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(dialogContext, false);
-                },
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: backup.thoughts.isEmpty
-                    ? null
-                    : () {
-                        Navigator.pop(dialogContext, true);
-                      },
-                child: const Text('恢复记录'),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (shouldRestore != true) {
-        return;
-      }
-
-      final result = await ArkDatabase.instance.importThoughts(backup.thoughts);
-
-      await _loadThoughts();
-
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '恢复完成：新增 ${result.importedCount} 条，'
-            '跳过 ${result.skippedCount} 条',
-          ),
-        ),
-      );
-    } on FormatException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('备份验证失败：${error.message}')));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('恢复备份失败：$error')));
-    }
   }
 
   Future<void> _delete(Thought thought) async {
@@ -808,31 +614,14 @@ class _HomePageState extends State<HomePage> {
                   ),
                 )
               else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  sliver: SliverList.separated(
-                    itemCount: _thoughts.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (_, index) {
-                      final thought = _thoughts[index];
-                      final id = thought.id;
-
-                      return ThoughtCard(
-                        thought: thought,
-                        isExpanded:
-                            id != null && _expandedThoughtIds.contains(id),
-                        onTap: () => _openDetail(thought),
-                        onToggleExpanded: () {
-                          if (id != null) {
-                            _toggleThoughtExpanded(id);
-                          }
-                        },
-                        onEdit: () => _openEditor(thought),
-                        onFavorite: () => _toggleFavorite(thought),
-                        onDelete: () => _delete(thought),
-                      );
-                    },
-                  ),
+                HomeThoughtList(
+                  thoughts: _thoughts,
+                  expandedThoughtIds: _expandedThoughtIds,
+                  onOpen: _openDetail,
+                  onToggleExpanded: _toggleThoughtExpanded,
+                  onEdit: _openEditor,
+                  onFavorite: _toggleFavorite,
+                  onDelete: _delete,
                 ),
             ],
           ),
@@ -851,18 +640,14 @@ class _HomePageState extends State<HomePage> {
       ),
       profilePage: SettingsPage(
         authSessionNotifier: _authSessionNotifier,
-        onExportBackup: _exportBackup,
-        onRestoreBackup: _previewBackup,
+        onThoughtsChanged: _loadThoughts,
       ),
     );
   }
 
   @override
   void dispose() {
-    unawaited(_audioRecorderService.dispose());
-    unawaited(_audioPlaybackService.dispose());
-    _transcriptionService?.dispose();
-    _transcriptionModelManager.dispose();
+    unawaited(_captureController.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();
     super.dispose();

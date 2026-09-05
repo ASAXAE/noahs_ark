@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../database/ark_database.dart';
@@ -24,6 +25,10 @@ class CaptureInboxPage extends StatefulWidget {
 class _CaptureInboxPageState extends State<CaptureInboxPage> {
   final _audioPlaybackService = AudioPlaybackService();
   final _audioRecorderService = AudioRecorderService();
+
+  StreamSubscription<void>? _playbackCompleteSubscription;
+  String? _activeAudioPath;
+  bool _playbackPaused = false;
   String? _deletingAudioPath;
   int? _retryingDraftId;
   List<CaptureDraft> _drafts = [];
@@ -33,6 +38,17 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   @override
   void initState() {
     super.initState();
+
+    _playbackCompleteSubscription = _audioPlaybackService.onPlayerComplete
+        .listen((_) {
+          if (!mounted) return;
+
+          setState(() {
+            _activeAudioPath = null;
+            _playbackPaused = false;
+          });
+        });
+
     _loadDrafts();
   }
 
@@ -51,33 +67,53 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
 
   @override
   void dispose() {
+    _playbackCompleteSubscription?.cancel();
     _audioPlaybackService.dispose();
     _audioRecorderService.dispose();
     super.dispose();
   }
 
   Future<void> _playDraft(CaptureDraft draft) async {
+    final audioPath = draft.audioPath;
+
     try {
-      final started = await _audioPlaybackService.play(draft.audioPath);
+      if (_activeAudioPath == audioPath) {
+        if (_playbackPaused) {
+          await _audioPlaybackService.resume();
 
-      if (!mounted) return;
+          if (!mounted || _activeAudioPath != audioPath) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(started ? '正在播放原始录音' : '找不到原始录音文件')),
-      );
+          setState(() => _playbackPaused = false);
+        } else {
+          await _audioPlaybackService.pause();
+
+          if (!mounted || _activeAudioPath != audioPath) return;
+
+          setState(() => _playbackPaused = true);
+        }
+
+        return;
+      }
+
+      final started = await _audioPlaybackService.play(audioPath);
+
+      if (!mounted || !started) return;
+
+      setState(() {
+        _activeAudioPath = audioPath;
+        _playbackPaused = false;
+      });
     } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('播放失败 ，请重试')));
+      debugPrint('播放原始录音失败：$error');
     }
   }
 
   Future<void> _retryDraft(CaptureDraft draft) async {
     final draftId = draft.id;
 
-    if (draftId == null || _retryingDraftId != null) return;
+    if (draftId == null) return;
+
+    if (_retryingDraftId != null) return;
 
     setState(() => _retryingDraftId = draftId);
 
@@ -428,23 +464,34 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
               spacing: 8,
               runSpacing: 8,
               children: [
+                const SizedBox(width: 5),
                 FilledButton.tonalIcon(
                   onPressed: () => _playDraft(draft),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 42),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
-                  icon: const Icon(Icons.play_arrow_rounded, size: 20),
-                  label: const Text('播放原音'),
+                  icon: Icon(
+                    _activeAudioPath == draft.audioPath && !_playbackPaused
+                        ? Icons.pause_rounded
+                        : Icons.play_arrow_rounded,
+                    size: 20,
+                  ),
+                  label: Text(
+                    _activeAudioPath == draft.audioPath && !_playbackPaused
+                        ? '暂停   '
+                        : '播放   ',
+                  ),
                 ),
+                const SizedBox(width: 30),
                 if (draft.transcriptionStatus ==
                         CaptureTranscriptionStatus.pending ||
                     draft.transcriptionStatus ==
                         CaptureTranscriptionStatus.failed)
                   FilledButton.icon(
-                    onPressed: _retryingDraftId == null
-                        ? () => _retryDraft(draft)
-                        : null,
+                    onPressed: _retryingDraftId == draft.id
+                        ? null
+                        : () => _retryDraft(draft),
                     icon: _retryingDraftId == draft.id
                         ? const SizedBox(
                             width: 16,

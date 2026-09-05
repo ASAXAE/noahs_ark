@@ -510,9 +510,13 @@ discarded.
   privacy and about. Keep AI inside the existing capture and Thought flows.
   Refresh the persistent inbox after capture or transcription changes, extract
   reusable home UI and move test-server Thought CRUD to a dedicated debug page
-- [ ] Day 50: continue reducing `HomePage` without changing behavior. Move backup
-  management under Settings and separate capture/transcription coordination from
-  the Ark page before choosing Provider, Bloc or another state-management approach
+- [x] Day 50: continue reducing `HomePage` by moving backup management under
+  Settings, extracting `HomeThoughtList` and introducing a plain
+  `CaptureController` for recording, local draft persistence, model management
+  and transcription state updates. Add two-state play/pause controls and
+  per-draft transcription feedback to the Flash Thought inbox without introducing
+  Provider or Bloc. Keep Sherpa decoding on the current isolate for now; a
+  dedicated background-isolate worker remains a separate performance follow-up
 - [ ] Day 51: run regression across the Flash Thought MVP, `HomePage` split and
   navigation. Verify permission denial, recording interruption, restart recovery,
   transcription failure, audio deletion, confirmed conversion and navigation

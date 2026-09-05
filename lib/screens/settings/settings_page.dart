@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
+import '../../database/ark_database.dart';
+import '../../services/backup_service.dart';
 
 import '../auth/login_page.dart';
 import 'local_first_info_page.dart';
@@ -10,13 +12,120 @@ class SettingsPage extends StatelessWidget {
   const SettingsPage({
     super.key,
     required this.authSessionNotifier,
-    required this.onExportBackup,
-    required this.onRestoreBackup,
+    required this.onThoughtsChanged,
   });
 
   final ValueNotifier<AuthSession?> authSessionNotifier;
-  final Future<void> Function() onExportBackup;
-  final Future<void> Function() onRestoreBackup;
+  final Future<void> Function() onThoughtsChanged;
+
+  Future<void> _exportBackup(BuildContext context) async {
+    try {
+      final thoughts = await ArkDatabase.instance.getThoughts();
+
+      if (!context.mounted) return;
+
+      if (thoughts.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('还没有可以导出的正式记录')));
+        return;
+      }
+
+      await BackupService().exportThoughts(thoughts);
+    } catch (error) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出失败：$error')));
+    }
+  }
+
+  Future<void> _previewBackup(BuildContext context) async {
+    try {
+      final backup = await BackupService().pickAndReadBackup();
+
+      if (backup == null || !context.mounted) {
+        return;
+      }
+
+      final localExportTime = backup.exportedAt.toLocal();
+      final displayTime = localExportTime.toString().split('.').first;
+
+      final shouldRestore = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('备份文件验证成功'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('正式记录数量：${backup.thoughts.length}'),
+                const SizedBox(height: 8),
+                Text('导出时间：$displayTime'),
+                const SizedBox(height: 16),
+                const Text('恢复不会删除现有正式记录，已经存在的相同记录会被跳过。'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, false);
+                },
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: backup.thoughts.isEmpty
+                    ? null
+                    : () {
+                        Navigator.pop(dialogContext, true);
+                      },
+                child: const Text('恢复记录'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldRestore != true) {
+        return;
+      }
+
+      final result = await ArkDatabase.instance.importThoughts(backup.thoughts);
+
+      await onThoughtsChanged();
+
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '恢复完成：新增 ${result.importedCount} 条，'
+            '跳过 ${result.skippedCount} 条',
+          ),
+        ),
+      );
+    } on FormatException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('备份验证失败：${error.message}')));
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('恢复备份失败：$error')));
+    }
+  }
 
   void _showLoginSuccess(BuildContext context, AuthSession session) {
     final messenger = ScaffoldMessenger.of(context);
@@ -215,20 +324,20 @@ class SettingsPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.file_upload_outlined),
                   title: const Text('导出备份'),
-                  subtitle: const Text('将全部本地记录导出为 JSON 文件'),
+                  subtitle: const Text('导出全部正式记录，不含闪念和录音'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
-                    await onExportBackup();
+                    await _exportBackup(context);
                   },
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.file_download_outlined),
                   title: const Text('恢复备份'),
-                  subtitle: const Text('选择并验证诺亚方舟 JSON 备份'),
+                  subtitle: const Text('选择并验证正式记录 JSON 备份'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
-                    await onRestoreBackup();
+                    await _previewBackup(context);
                   },
                 ),
               ],
