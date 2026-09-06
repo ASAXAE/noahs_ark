@@ -517,43 +517,82 @@ discarded.
   per-draft transcription feedback to the Flash Thought inbox without introducing
   Provider or Bloc. Keep Sherpa decoding on the current isolate for now; a
   dedicated background-isolate worker remains a separate performance follow-up
-- [ ] Day 51: run regression across the Flash Thought MVP, `HomePage` split and
+- [x] Day 51: move Sherpa transcription into a long-lived `TranscriptionWorker`.
+  Initialize bindings and create, reuse and dispose the recognizer inside its
+  worker isolate; exchange audio paths, request IDs, text and errors with the
+  main isolate. Keep SQLite and draft state in the main isolate. Verify UI
+  responsiveness, sequential requests, error/retry delivery and worker shutdown.
+  Run regression across the Flash Thought MVP, `HomePage` split and
   navigation. Verify permission denial, recording interruption, restart recovery,
   transcription failure, audio deletion, confirmed conversion and navigation
   state, including at least one Android physical-device microphone test. Create
   `v0.2.0-flash-mvp` only after every check passes
-- [ ] Day 52: establish a formal database migration mechanism
-- [ ] Day 53: add basic CI for Dart format, Flutter analyze/test and Node unit tests
-- [ ] Day 54: extend CI with PostgreSQL, migrations, two-account integration tests
+- [ ] Day 52: add a user-visible transcription queue. Allow additional drafts to
+  be submitted while one is running, but execute recognition serially through
+  one reusable worker/model. Show waiting, queued, transcribing, failed and
+  completed states per draft, prevent duplicate submissions and continue after
+  individual failures. Support cancelling queued work and safely removing queued
+  drafts without later processing deleted audio; define active-task deletion
+  behavior explicitly. Preserve queue state across tab navigation. For this
+  first version, keep the queue in memory and return interrupted jobs to a
+  retryable state after app restart rather than silently resuming them. Verify
+  queue order, failure continuation, cancellation, deletion and restart recovery;
+  do not equate a Dart worker isolate with Android background execution support
+- [ ] Day 53: establish a formal database migration mechanism
+- [ ] Day 54: add basic CI for Dart format, Flutter analyze/test and Node unit tests
+- [ ] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
   and a Docker build
-- [ ] Day 55: add email-verification database structures with expiring,
+- [ ] Day 56: define recording-session ownership independently of page widgets,
+  including permission checks, lifecycle transitions, interruption handling and
+  recovery. Select an Android microphone foreground-service integration and
+  establish one authoritative recording state shared by the UI and service
+- [ ] Day 57: implement user-initiated microphone foreground-service recording
+  with a required recording notification. Verify continuous audio while switching
+  apps or locking the screen; stopping must finalize local audio, save one draft
+  and end the service
+- [ ] Day 58: add elapsed recording time and a Stop and Save action to the
+  notification. Keep notification and in-app state consistent, including stopping
+  from the notification and returning to the app without duplicate draft saves
+- [ ] Day 59: verify background recording on physical Android devices, covering
+  lock screen, long recordings, microphone contention, permission changes and
+  process termination. Recover usable saved audio where possible and surface
+  interruptions honestly; never imply that force-stopped recording continues
+- [ ] Day 60: move the recording entry from the Ark home page into the Flash
+  Thought destination. Add an in-app recording panel with elapsed time, real
+  audio-level feedback and Stop and Save. Preserve an active recording when
+  navigating between destinations and restore its visible state on return
+- [ ] Day 61: add playback progress and seeking to inbox audio, showing current
+  position and total duration. Verify seeking, pause/resume, completion, switching
+  clips and deletion during playback. Regress the new capture entry together
+  with background recording, notification controls and confirmed conversion
+- [ ] Day 62: add email-verification database structures with expiring,
   single-use tokens stored only as hashes
-- [ ] Day 56: add a mail-sending adapter, development fake sender, resend flow and
+- [ ] Day 63: add a mail-sending adapter, development fake sender, resend flow and
   rate limits. External services require explicit approval
-- [ ] Day 57: show email-verification state, resend and results in Flutter without
+- [ ] Day 64: show email-verification state, resend and results in Flutter without
   restricting local-only use
-- [ ] Day 58: add short-lived access tokens plus refresh-token hashing, rotation,
+- [ ] Day 65: add short-lived access tokens plus refresh-token hashing, rotation,
   reuse detection, revocation and secure storage
-- [ ] Day 59: add password recovery and reset without revealing whether an email
+- [ ] Day 66: add password recovery and reset without revealing whether an email
   exists, and revoke old sessions after a successful reset
-- [ ] Day 60: add account deletion for cloud accounts, server data and sessions
+- [ ] Day 67: add account deletion for cloud accounts, server data and sessions
   without deleting local SQLite, backups or original audio by default
-- [ ] Day 61: harden the API
-- [ ] Day 62: prepare staging; cloud platform, resources and costs require explicit
+- [ ] Day 68: harden the API
+- [ ] Day 69: prepare staging; cloud platform, resources and costs require explicit
   approval
-- [ ] Day 63: verify HTTPS, database TLS, environment isolation and secret rotation
-- [ ] Day 64: productionize health checks, request IDs, error monitoring and
+- [ ] Day 70: verify HTTPS, database TLS, environment isolation and secret rotation
+- [ ] Day 71: productionize health checks, request IDs, error monitoring and
   privacy-safe logging
-- [ ] Day 65: configure PostgreSQL backups and complete a real restore exercise
-- [ ] Day 66: finish the privacy policy, retention periods, third-party-service
+- [ ] Day 72: configure PostgreSQL backups and complete a real restore exercise
+- [ ] Day 73: finish the privacy policy, retention periods, third-party-service
   disclosures and recording/transcription consent rules
-- [ ] Day 67: complete full Android physical-device regression
-- [ ] Day 68: prepare versioning, changelog, signed APK/AAB and internal-test notes
-- [ ] Day 69: pass the release gate before creating
+- [ ] Day 74: complete full Android physical-device regression
+- [ ] Day 75: prepare versioning, changelog, signed APK/AAB and internal-test notes
+- [ ] Day 76: pass the release gate before creating
   `v0.3.0-cloud-foundation`
-- [ ] Day 70: write an optional synchronization design document without
+- [ ] Day 77: write an optional synchronization design document without
   implementing uploads
-- [ ] Day 71–77: sequentially add UUID and sync metadata, an explicit sync switch,
+- [ ] Day 78–84: sequentially add UUID and sync metadata, an explicit sync switch,
   idempotent synchronization, cursor-based upload/download, an offline queue,
   conflict and deletion propagation, then dual-device and staged-rollout testing.
   Create `v0.4.0-sync-beta` only after every check passes
@@ -573,12 +612,111 @@ reorganization. Manual emulator checks covered cancellation, leaving without
 saving, conversion, linked record opening, original-audio retention and
 unlink-on-delete. The focused `CaptureDraft` model test also passes.
 
+### Flash Thought capture direction / 闪念记录规划
+
+The Flash Thought destination will own both capture entry points and the inbox.
+The Ark home page will focus on formal Thoughts, search and filtering; its
+recording button moves to Flash Thought on Day 60. Recording-session ownership
+must remain independent of the currently visible page.
+
+- Recording feedback: show elapsed time and a live audio-level indicator or
+  waveform derived from microphone input. An open-ended recording has no known
+  completion percentage, so do not display a fabricated percentage progress bar.
+  If a maximum duration is introduced later, show the limit explicitly. Silence
+  alone must not be treated as proof of a recording failure.
+- Playback feedback: show a seekable progress bar with current position and total
+  duration on Day 61. Keep its position synchronized with the actual player.
+- Transcription submission: Day 52 replaces the current single-submission guard
+  with a visible queue; it does not run multiple recognizers concurrently. While
+  the guard remains, give clear busy feedback or visibly disable unavailable
+  actions instead of accepting a tap with no explanation. Successful drafts
+  currently proceed to organization; successful-result retranscription is a
+  separate future action requiring a clear policy for replacing existing text.
+- Future input direction: the user envisions two Flash Thought capture methods:
+  audio recording and brain-computer interface (BCI / 脑机接口) device input.
+  After Day 84, schedule a separate feasibility milestone before implementation:
+  identify a candidate device and available SDK/protocol, verify its actual
+  output (such as signals, events or commands), mobile compatibility, access
+  requirements and privacy constraints, and demonstrate a minimal input flow.
+  Do not assume that a device can decode free-form thoughts into journal text.
+  Hardware purchases, external services and transmission of neural data require
+  explicit user approval. Set implementation days only after feasibility is
+  established; do not add a nonfunctional button or speculative data schema now.
+  Any adopted input method must preserve local-first storage and explicit
+  confirmation before creating a formal Thought.
+- Platform status surfaces: Android recording notifications are part of
+  Day 57–58. Apple Live Activities / Dynamic Island and Android vendor-specific
+  capsule displays are separate future enhancements requiring supported devices
+  and platform research; they are not prerequisites for continuous recording.
+
+Day 51 physical-device findings (OPPO A52 / PDAM10, Android 11): the user verified
+permission denial feedback, recording after restoring permission, clear
+approximately 30-second audio, playback and saved-draft playback after restart.
+Profile-mode cold launch took approximately two seconds, compared with more than
+ten seconds in debug mode; the user also verified the updated native launch logo.
+The original recording implementation lost the background segment while the UI
+continued to indicate recording. An interim lifecycle handler now stops and
+saves on `paused`, with feedback on return. The user verified Home-key and
+lock-screen auto-save, one playable draft per recording, uninterrupted capture
+across in-app tabs, and recovery after immediately backgrounding a new recording.
+After this change, a focused microphone-permission denial regression also showed
+the correct message, no background-save message, no empty draft and no stuck
+recording control. Deleting a disposable draft removed it immediately and it
+remained absent after restart, with no error shown.
+Day 56–59 will replace this fallback with supported background recording.
+
+Offline model files were imported over USB because phone Wi-Fi was unavailable.
+Before the worker change, the user verified accurate local transcription in
+approximately three seconds and an injected controller failure followed by
+successful retry with original audio retained; that injection was removed.
+After the worker change, the user verified successful transcription with smooth
+scrolling, tab switching and an animated loading indicator, followed by another
+successful draft in the same app session. An injected worker-isolate failure was
+returned to the main isolate, left the original audio playable and then retried
+successfully through the same worker; the injection was removed afterward.
+These results verify sequential reuse, not measured model-load counts. Graceful
+shutdown is implemented through an explicit dispose message and worker `finally`,
+but no dedicated runtime observation was performed. Returning to the Android
+home screen pauses background computation, so the isolate must not be described
+as background-execution support. Remaining Day 51 regression checks still apply;
+do not create `v0.2.0-flash-mvp` until all required checks pass.
+
+Day 51 also found that converting a draft wrote the new `Thought` to SQLite but
+left the Ark page's cached list stale until manual refresh. `CaptureInboxPage`
+now reports a successful conversion through `onThoughtsChanged`, and `HomePage`
+reloads its owned Thought list. Physical-device verification confirmed that the
+draft changes to organized and the new formal record appears in Ark immediately
+without pull-to-refresh. The reverse direction is synchronized as well:
+successful Thought changes reload Ark and increment the inbox refresh version,
+while changes opened from a converted draft refresh both pages. Physical-device
+verification confirmed that deleting the linked formal record immediately
+restores the draft to an organizable state, retains playable original audio and
+requires no pull-to-refresh.
+
+Day 51 automated verification completed after the final changes: `dart format`
+reported all four changed Dart files already formatted, all 16 Flutter tests
+passed, `flutter build apk --debug` produced `app-debug.apk`, and
+`git diff --check` reported no whitespace errors. `flutter analyze` was not run
+for this learning task. The Android 11 launch screen, physical-device recording,
+interruption fallback, offline transcription, conversion and navigation checks
+above provide the manual acceptance evidence for `v0.2.0-flash-mvp`.
+
+Days are learning work units rather than guaranteed calendar-day estimates.
+Day 52 adds transcription queue work; Day 56–59 adds background recording and
+Day 60–61 adds capture-entry and playback UX work. Migration and CI now occupy
+Day 53–55, account work starts on Day 62, the cloud-foundation release gate is
+Day 76, and optional sync is Day 77–84. Future unchecked tasks remain plans.
+
 ### Product backlog
 
 - Test the release candidate on a physical Android device
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Design an opt-in, privacy-preserving sync model
+- Research BCI device input after Day 84; select hardware and validate actual
+  output and privacy boundaries before scheduling a Flash Thought integration
+- Evaluate Live Activities / Dynamic Island and Android vendor status capsules
+  after the core recording lifecycle and notification controls are reliable
 
 ## Author
 

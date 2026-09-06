@@ -3,13 +3,13 @@ import '../models/capture_draft.dart';
 import '../services/audio_playback_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/transcription_model_manager.dart';
-import '../services/sherpa_transcription_service.dart';
+import '../services/transcription_worker.dart';
 
 class CaptureController {
   final _audioRecorderService = AudioRecorderService();
   final _audioPlaybackService = AudioPlaybackService();
   final _transcriptionModelManager = TranscriptionModelManager();
-  SherpaTranscriptionService? _transcriptionService;
+  TranscriptionWorker? _transcriptionWorker;
 
   Future<String?> startRecording() {
     return _audioRecorderService.startRecording();
@@ -63,12 +63,12 @@ class CaptureController {
     required String audioPath,
     required TranscriptionModelFiles modelFiles,
   }) {
-    _transcriptionService ??= SherpaTranscriptionService(
+    _transcriptionWorker ??= TranscriptionWorker(
       modelPath: modelFiles.modelPath,
       tokensPath: modelFiles.tokensPath,
     );
 
-    return _transcriptionService!.transcribeFile(audioPath);
+    return _transcriptionWorker!.transcribeFile(audioPath);
   }
 
   Future<CaptureDraft> transcribeDraft({
@@ -112,7 +112,7 @@ class CaptureController {
   }
 
   Future<void> dispose() async {
-    _transcriptionService?.dispose();
+    await _transcriptionWorker?.dispose();
     _transcriptionModelManager.dispose();
     await _audioPlaybackService.dispose();
     await _audioRecorderService.dispose();

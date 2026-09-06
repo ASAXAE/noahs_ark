@@ -12,10 +12,12 @@ class CaptureInboxPage extends StatefulWidget {
   const CaptureInboxPage({
     super.key,
     required this.onRetryTranscription,
+    required this.onThoughtsChanged,
     this.refreshVersion = 0,
   });
 
   final Future<void> Function(int draftId) onRetryTranscription;
+  final Future<void> Function() onThoughtsChanged;
   final int refreshVersion;
 
   @override
@@ -188,6 +190,10 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
 
     if (!mounted) return;
 
+    await widget.onThoughtsChanged();
+
+    if (!mounted) return;
+
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('已保存为正式记录，原始录音仍保留在本机')));
@@ -215,6 +221,10 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
 
     if (changed == true && mounted) {
       await _loadDrafts();
+
+      if (!mounted) return;
+
+      await widget.onThoughtsChanged();
     }
   }
 

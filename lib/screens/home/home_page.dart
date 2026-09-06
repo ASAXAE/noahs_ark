@@ -29,7 +29,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   final _captureController = CaptureController();
   bool _modelDownloadInProgress = false;
@@ -46,13 +46,29 @@ class _HomePageState extends State<HomePage> {
   String? _selectedTag;
   bool _isRecording = false;
   bool _recordingActionInProgress = false;
+  bool _isAppInBackground = false;
+  String? _pendingRecordingNotice;
   int _captureInboxRefreshVersion = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadThoughts();
     _restoreAuthSession();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('应用生命周期：${state.name}');
+
+    if (state == AppLifecycleState.paused) {
+      _isAppInBackground = true;
+      unawaited(_stopRecordingForBackground());
+    } else if (state == AppLifecycleState.resumed) {
+      _isAppInBackground = false;
+      _showPendingRecordingNotice();
+    }
   }
 
   Future<int> _saveCaptureDraft(String audioPath) async {
@@ -248,6 +264,65 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showPendingRecordingNotice() {
+    if (!mounted ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+
+    final message = _pendingRecordingNotice;
+    if (message == null) return;
+
+    _pendingRecordingNotice = null;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _stopRecordingForBackground() async {
+    if (!mounted ||
+        !_isAppInBackground ||
+        !_isRecording ||
+        _recordingActionInProgress) {
+      return;
+    }
+
+    setState(() => _recordingActionInProgress = true);
+
+    try {
+      final saved = await _stopRecordingAndSave();
+
+      _pendingRecordingNotice = saved
+          ? '应用进入后台，录音已自动停止并保存到闪念'
+          : '录音已停止，但未获取到可保存的音频';
+    } catch (error) {
+      debugPrint('后台停止或保存录音失败：$error');
+      _pendingRecordingNotice = '自动停止或保存失败，请检查录音状态和闪念列表';
+    } finally {
+      if (mounted) {
+        setState(() => _recordingActionInProgress = false);
+        _showPendingRecordingNotice();
+      }
+    }
+  }
+
+  Future<bool> _stopRecordingAndSave() async {
+    final recordingPath = await _captureController.stopRecording();
+
+    // 停止采集后立即更新状态，保存失败也不能继续显示录音中。
+    if (mounted) {
+      setState(() => _isRecording = false);
+    }
+
+    if (recordingPath == null) {
+      return false;
+    }
+
+    await _saveCaptureDraft(recordingPath);
+    return true;
+  }
+
   Future<void> _toggleRecording() async {
     if (_recordingActionInProgress) {
       return;
@@ -257,15 +332,15 @@ class _HomePageState extends State<HomePage> {
 
     try {
       if (_isRecording) {
-        final recordingPath = await _captureController.stopRecording();
-
-        if (recordingPath != null) {
-          await _saveCaptureDraft(recordingPath);
-        }
+        final saved = await _stopRecordingAndSave();
 
         if (!mounted) return;
 
-        setState(() => _isRecording = false);
+        if (!saved) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('录音已停止，但未获取到可保存的音频')));
+        }
 
         return;
       }
@@ -291,6 +366,10 @@ class _HomePageState extends State<HomePage> {
     } finally {
       if (mounted) {
         setState(() => _recordingActionInProgress = false);
+
+        if (_isAppInBackground && _isRecording) {
+          unawaited(_stopRecordingForBackground());
+        }
       }
     }
   }
@@ -403,13 +482,23 @@ class _HomePageState extends State<HomePage> {
     if (changed == true) await _loadThoughts();
   }
 
+  Future<void> _reloadThoughtsAndCaptureInbox() async {
+    await _loadThoughts();
+
+    if (!mounted) return;
+
+    setState(() {
+      _captureInboxRefreshVersion++;
+    });
+  }
+
   Future<void> _openDetail(Thought thought) async {
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(builder: (_) => ThoughtDetailPage(thought: thought)),
     );
 
     if (changed == true) {
-      await _loadThoughts();
+      await _reloadThoughtsAndCaptureInbox();
     }
   }
 
@@ -457,7 +546,7 @@ class _HomePageState extends State<HomePage> {
 
     try {
       await ArkDatabase.instance.deleteThought(id);
-      await _loadThoughts();
+      await _reloadThoughtsAndCaptureInbox();
 
       if (!mounted) {
         return;
@@ -636,6 +725,7 @@ class _HomePageState extends State<HomePage> {
       arkPage: _buildArkPage(context),
       capturePage: CaptureInboxPage(
         onRetryTranscription: _transcribeCaptureDraft,
+        onThoughtsChanged: _loadThoughts,
         refreshVersion: _captureInboxRefreshVersion,
       ),
       profilePage: SettingsPage(
@@ -647,6 +737,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_captureController.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();
