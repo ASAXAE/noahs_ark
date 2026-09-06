@@ -527,7 +527,13 @@ discarded.
   transcription failure, audio deletion, confirmed conversion and navigation
   state, including at least one Android physical-device microphone test. Create
   `v0.2.0-flash-mvp` only after every check passes
-- [ ] Day 52: add a user-visible transcription queue. Allow additional drafts to
+- [ ] Day 52: establish basic CI before adding more asynchronous feature state.
+  On every relevant push and pull request, install pinned Flutter and Node.js
+  environments, restore dependencies, check Dart formatting, run Flutter static
+  analysis and tests, and run Node unit tests. Keep this stage independent of
+  PostgreSQL, external services and production secrets; fail visibly when any
+  required check fails
+- [ ] Day 53: add a user-visible transcription queue. Allow additional drafts to
   be submitted while one is running, but execute recognition serially through
   one reusable worker/model. Show waiting, queued, transcribing, failed and
   completed states per draft, prevent duplicate submissions and continue after
@@ -537,15 +543,21 @@ discarded.
   first version, keep the queue in memory and return interrupted jobs to a
   retryable state after app restart rather than silently resuming them. Verify
   queue order, failure continuation, cancellation, deletion and restart recovery;
-  do not equate a Dart worker isolate with Android background execution support
-- [ ] Day 53: establish a formal database migration mechanism
-- [ ] Day 54: add basic CI for Dart format, Flutter analyze/test and Node unit tests
+  do not equate a Dart worker isolate with Android background execution support.
+  Introduce `CaptureViewModel` as the owner of transcription-queue state and
+  commands, and migrate capture UI state into it incrementally instead of adding
+  more page-local flags
+- [ ] Day 54: establish a formal database migration mechanism
 - [ ] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
   and a Docker build
 - [ ] Day 56: define recording-session ownership independently of page widgets,
   including permission checks, lifecycle transitions, interruption handling and
-  recovery. Select an Android microphone foreground-service integration and
-  establish one authoritative recording state shared by the UI and service
+  recovery. Introduce `CaptureRepository` as the source of truth for capture
+  drafts and recording/transcription operations. It coordinates `ArkDatabase`,
+  audio services, model management and `TranscriptionWorker`; migrate callers
+  from the transitional `CaptureController` before removing that class. Select
+  an Android microphone foreground-service integration and establish one
+  authoritative recording state shared by the UI and service
 - [ ] Day 57: implement user-initiated microphone foreground-service recording
   with a required recording notification. Verify continuous audio while switching
   apps or locking the screen; stopping must finalize local audio, save one draft
@@ -560,11 +572,15 @@ discarded.
 - [ ] Day 60: move the recording entry from the Ark home page into the Flash
   Thought destination. Add an in-app recording panel with elapsed time, real
   audio-level feedback and Stop and Save. Preserve an active recording when
-  navigating between destinations and restore its visible state on return
+  navigating between destinations and restore its visible state on return.
+  Complete the capture UI boundary so `CaptureInboxPage` renders ViewModel state
+  and forwards user actions, while `HomePage` no longer owns capture behavior
 - [ ] Day 61: add playback progress and seeking to inbox audio, showing current
   position and total duration. Verify seeking, pause/resume, completion, switching
   clips and deletion during playback. Regress the new capture entry together
-  with background recording, notification controls and confirmed conversion
+  with background recording, notification controls and confirmed conversion.
+  Keep playback state and commands outside the page, then review the completed
+  `View → ViewModel → Repository → Database/Service` boundary
 - [ ] Day 62: add email-verification database structures with expiring,
   single-use tokens stored only as hashes
 - [ ] Day 63: add a mail-sending adapter, development fake sender, resend flow and
@@ -626,7 +642,7 @@ must remain independent of the currently visible page.
   alone must not be treated as proof of a recording failure.
 - Playback feedback: show a seekable progress bar with current position and total
   duration on Day 61. Keep its position synchronized with the actual player.
-- Transcription submission: Day 52 replaces the current single-submission guard
+- Transcription submission: Day 53 replaces the current single-submission guard
   with a visible queue; it does not run multiple recognizers concurrently. While
   the guard remains, give clear busy feedback or visibly disable unavailable
   actions instead of accepting a tap with no explanation. Successful drafts
@@ -648,6 +664,54 @@ must remain independent of the currently visible page.
   Day 57–58. Apple Live Activities / Dynamic Island and Android vendor-specific
   capsule displays are separate future enhancements requiring supported devices
   and platform research; they are not prerequisites for continuous recording.
+
+### Gradual MVVM direction / 渐进式 MVVM 调整
+
+The capture feature will move toward Flutter's recommended separation of Views,
+ViewModels, Repositories and Services as its next features are built. This is a
+responsibility-based migration, not a rewrite, and it does not change the meaning
+of the `v0.2.0-flash-mvp` product milestone. Flutter's architecture guidance is
+available in the [official app architecture guide](https://docs.flutter.dev/app-architecture/guide).
+
+```text
+CaptureInboxPage (View)
+        ↓ user actions / observes UI state
+CaptureViewModel
+        ↓ capture operations / observes source-of-truth state
+CaptureRepository
+        ↓
+ArkDatabase + audio services + model manager + TranscriptionWorker
+```
+
+- `CaptureViewModel` owns recording, playback and transcription-queue UI state,
+  exposes commands for user actions, and converts repository data into state the
+  View can render. It must not perform SQLite, file, plugin or Sherpa calls
+  directly.
+- `CaptureRepository` is the source of truth for `CaptureDraft` data and capture
+  session state. It coordinates database and platform services, centralizes
+  retry/error rules and exposes stable operations and observable state to the
+  ViewModel.
+- `CaptureInboxPage` becomes a View: it renders ViewModel state, handles layout,
+  dialogs and navigation, and forwards recording, playback, transcription,
+  organization and deletion actions as commands. It must not call
+  `ArkDatabase` or audio services directly after the migration is complete.
+- `ArkDatabase` and the audio, model and Sherpa worker classes remain the lowest
+  data/platform layer. They perform SQLite, local-file, plugin and inference work
+  without depending on widgets or BuildContext.
+
+The current `CaptureController` is a transition point rather than the final
+architecture. Day 53 first moves queue state and commands into
+`CaptureViewModel`; Day 56 introduces `CaptureRepository` while recording
+ownership is redesigned; Day 60–61 completes the View boundary as capture and
+playback UI move under Flash Thought. Keep constructor-based dependencies and
+well-defined interfaces so each responsibility can be tested independently.
+Adding Provider, Riverpod, Bloc or another state-management package is a separate
+decision and is not required merely to call the structure MVVM.
+
+During migration, preserve one working path at a time: move responsibility,
+update its callers, verify behavior, and only then remove the old path. Do not
+maintain two writable sources of truth for the same recording, queue or draft
+state, and do not combine this refactor with cloud sync or BCI integration.
 
 Day 51 physical-device findings (OPPO A52 / PDAM10, Android 11): the user verified
 permission denial feedback, recording after restoring permission, clear
@@ -702,10 +766,12 @@ interruption fallback, offline transcription, conversion and navigation checks
 above provide the manual acceptance evidence for `v0.2.0-flash-mvp`.
 
 Days are learning work units rather than guaranteed calendar-day estimates.
-Day 52 adds transcription queue work; Day 56–59 adds background recording and
-Day 60–61 adds capture-entry and playback UX work. Migration and CI now occupy
-Day 53–55, account work starts on Day 62, the cloud-foundation release gate is
-Day 76, and optional sync is Day 77–84. Future unchecked tasks remain plans.
+Day 52 establishes basic CI before the Day 53 transcription queue and
+`CaptureViewModel` work. Day 54 adds formal database migrations, and Day 55 then
+extends CI with PostgreSQL, migrations, integration tests and a Docker build.
+Day 56–59 adds background recording and Day 60–61 adds capture-entry and playback
+UX work. Account work starts on Day 62, the cloud-foundation release gate is Day
+76, and optional sync is Day 77–84. Future unchecked tasks remain plans.
 
 ### Product backlog
 
