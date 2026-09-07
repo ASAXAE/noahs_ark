@@ -39,10 +39,7 @@ class NoahApp extends StatelessWidget {
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(20)),
-            side: BorderSide(
-              color: Color(0xFFE7E2D8),
-              width: 1,
-            ),
+            side: BorderSide(color: Color(0xFFE7E2D8), width: 1),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(

@@ -17,10 +17,7 @@ class HomeHero extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '今日思考',
-                  style: TextStyle(color: Colors.white70),
-                ),
+                Text('今日思考', style: TextStyle(color: Colors.white70)),
                 SizedBox(height: 6),
                 Text(
                   '把重要的想法留下来',
@@ -36,11 +33,7 @@ class HomeHero extends StatelessWidget {
           CircleAvatar(
             radius: 28,
             backgroundColor: Colors.white.withValues(alpha: 0.15),
-            child: const Icon(
-              Icons.sailing,
-              color: Colors.white,
-              size: 30,
-            ),
+            child: const Icon(Icons.sailing, color: Colors.white, size: 30),
           ),
         ],
       ),
