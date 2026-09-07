@@ -527,12 +527,18 @@ discarded.
   transcription failure, audio deletion, confirmed conversion and navigation
   state, including at least one Android physical-device microphone test. Create
   `v0.2.0-flash-mvp` only after every check passes
-- [ ] Day 52: establish basic CI before adding more asynchronous feature state.
-  On every relevant push and pull request, install pinned Flutter and Node.js
-  environments, restore dependencies, check Dart formatting, run Flutter static
-  analysis and tests, and run Node unit tests. Keep this stage independent of
-  PostgreSQL, external services and production secrets; fail visibly when any
-  required check fails
+- [x] Day 52: establish basic CI in `.github/workflows/ci.yml`.
+  Run independent Flutter and backend jobs on pushes, pull requests and manual
+  dispatches, using Flutter 3.41.2 stable and Node.js 24.19.0.
+  Check Dart formatting, run Flutter static analysis and tests, and install
+  backend dependencies with `npm ci` before running Node unit tests.
+  Keep checks independent of PostgreSQL and production secrets.
+  Local verification passed: 39 Dart files required no formatting changes,
+  Flutter analysis reported no issues, all 16 Flutter tests passed, and all
+  15 backend unit tests passed. GitHub Actions run #1 for commit `26c7f85`
+  passed both jobs: Backend unit tests in 14 seconds and Flutter checks in
+  2 minutes 5 seconds. This completes basic CI; automated deployment and
+  release delivery remain future work
 - [ ] Day 53: add a user-visible transcription queue. Allow additional drafts to
   be submitted while one is running, but execute recognition serially through
   one reusable worker/model. Show waiting, queued, transcribing, failed and
@@ -766,7 +772,7 @@ interruption fallback, offline transcription, conversion and navigation checks
 above provide the manual acceptance evidence for `v0.2.0-flash-mvp`.
 
 Days are learning work units rather than guaranteed calendar-day estimates.
-Day 52 establishes basic CI before the Day 53 transcription queue and
+Day 52 completed basic CI before the Day 53 transcription queue and
 `CaptureViewModel` work. Day 54 adds formal database migrations, and Day 55 then
 extends CI with PostgreSQL, migrations, integration tests and a Docker build.
 Day 56–59 adds background recording and Day 60–61 adds capture-entry and playback
