@@ -21,6 +21,7 @@ import 'widgets/home_filters.dart';
 import 'widgets/home_empty_state.dart';
 import 'widgets/home_thought_list.dart';
 import '../debug/server_thoughts_debug_page.dart';
+import '../../view_models/capture_view_model.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,11 +33,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _searchController = TextEditingController();
   final _captureController = CaptureController();
+  late final CaptureViewModel _captureViewModel;
   bool _modelDownloadInProgress = false;
   final ValueNotifier<AuthSession?> _authSessionNotifier =
       ValueNotifier<AuthSession?>(null);
-
-  bool _transcriptionInProgress = false;
 
   final Set<int> _expandedThoughtIds = {};
   List<Thought> _thoughts = [];
@@ -49,10 +49,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isAppInBackground = false;
   String? _pendingRecordingNotice;
   int _captureInboxRefreshVersion = 0;
+  bool _queueCompletedDialogVisible = false;
 
   @override
   void initState() {
     super.initState();
+    _captureViewModel = CaptureViewModel(
+      runTranscription: _runQueuedTranscription,
+      onQueueDrained: _showTranscriptionQueueCompletedDialog,
+    );
+    unawaited(_recoverInterruptedTranscriptions());
     WidgetsBinding.instance.addObserver(this);
     _loadThoughts();
     _restoreAuthSession();
@@ -68,6 +74,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else if (state == AppLifecycleState.resumed) {
       _isAppInBackground = false;
       _showPendingRecordingNotice();
+    }
+  }
+
+  Future<void> _recoverInterruptedTranscriptions() async {
+    try {
+      final recoveredCount = await _captureController
+          .recoverInterruptedTranscriptions();
+
+      if (!mounted || recoveredCount == 0) {
+        return;
+      }
+
+      setState(() {
+        _captureInboxRefreshVersion++;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('发现 $recoveredCount 条被中断的转写，可以在闪念收集箱中重试')),
+        );
+      });
+    } catch (error) {
+      debugPrint('恢复中断的转写状态失败：$error');
     }
   }
 
@@ -177,12 +208,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return _captureController.getTranscriptionModelFiles();
   }
 
-  Future<void> _transcribeCaptureDraft(int draftId) async {
-    if (_transcriptionInProgress) {
+  Future<void> _queueCaptureDraft(int draftId) {
+    final submitted = _captureViewModel.submitDraft(draftId);
+
+    if (!submitted && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该闪念正在转写或已经排队')));
+    }
+
+    return Future<void>.value();
+  }
+
+  void _showTranscriptionQueueCompletedDialog() {
+    if (!mounted || _queueCompletedDialogVisible) {
       return;
     }
 
-    _transcriptionInProgress = true;
+    _queueCompletedDialogVisible = true;
+
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('转写队列已处理完毕'),
+            content: const Text('所有排队任务都已处理，请在闪念收集箱中查看转写结果或失败状态。'),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('知道了'),
+              ),
+            ],
+          );
+        },
+      ).whenComplete(() {
+        _queueCompletedDialogVisible = false;
+      }),
+    );
+  }
+
+  Future<void> _runQueuedTranscription(int draftId) async {
     var transcriptionStarted = false;
 
     try {
@@ -198,46 +264,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
 
       final modelFiles = await _getTranscriptionModelFiles();
+
       if (modelFiles == null) {
         return;
       }
 
       transcriptionStarted = true;
 
-      final completedDraft = await _captureController.transcribeDraft(
+      await _captureController.transcribeDraft(
         draft: draft,
         modelFiles: modelFiles,
-      );
-
-      final transcript = completedDraft.transcript!;
-
-      if (!mounted) {
-        return;
-      }
-
-      unawaited(
-        showDialog<void>(
-          context: context,
-          builder: (dialogContext) {
-            return AlertDialog(
-              title: const Text('转写完成'),
-              content: SelectableText(transcript),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext);
-                    unawaited(_playRecording(completedDraft.audioPath));
-                  },
-                  child: const Text('播放原音'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('关闭'),
-                ),
-              ],
-            );
-          },
-        ),
       );
     } catch (error) {
       if (mounted) {
@@ -247,15 +283,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             action: SnackBarAction(
               label: '重试',
               onPressed: () {
-                unawaited(_transcribeCaptureDraft(draftId));
+                unawaited(_queueCaptureDraft(draftId));
               },
             ),
           ),
         );
       }
-    } finally {
-      _transcriptionInProgress = false;
 
+      rethrow;
+    } finally {
       if (mounted && transcriptionStarted) {
         setState(() {
           _captureInboxRefreshVersion++;
@@ -371,57 +407,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           unawaited(_stopRecordingForBackground());
         }
       }
-    }
-  }
-
-  Future<void> _playRecording(String filePath) async {
-    try {
-      final didStartPlaying = await _captureController.playRecording(filePath);
-
-      if (!mounted) return;
-
-      if (!didStartPlaying) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('找不到录音文件')));
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('正在播放原始录音'),
-          action: SnackBarAction(
-            label: '删除',
-            onPressed: () {
-              unawaited(_deleteRecording(filePath));
-            },
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('播放失败，请重试')));
-    }
-  }
-
-  Future<void> _deleteRecording(String filePath) async {
-    try {
-      final deleted = await _captureController.deleteRecording(filePath);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(deleted ? '原始录音已从本机删除' : '没有找到可删除的录音')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('删除录音失败，请重试')));
     }
   }
 
@@ -724,7 +709,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return AppShell(
       arkPage: _buildArkPage(context),
       capturePage: CaptureInboxPage(
-        onRetryTranscription: _transcribeCaptureDraft,
+        captureViewModel: _captureViewModel,
+        onRetryTranscription: _queueCaptureDraft,
         onThoughtsChanged: _loadThoughts,
         refreshVersion: _captureInboxRefreshVersion,
       ),
@@ -738,6 +724,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _captureViewModel.dispose();
     unawaited(_captureController.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();

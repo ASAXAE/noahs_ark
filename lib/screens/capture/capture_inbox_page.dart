@@ -7,17 +7,20 @@ import '../../services/audio_playback_service.dart';
 import '../../services/audio_recorder_service.dart';
 import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
+import '../../view_models/capture_view_model.dart';
 
 class CaptureInboxPage extends StatefulWidget {
   const CaptureInboxPage({
     super.key,
     required this.onRetryTranscription,
     required this.onThoughtsChanged,
+    required this.captureViewModel,
     this.refreshVersion = 0,
   });
 
   final Future<void> Function(int draftId) onRetryTranscription;
   final Future<void> Function() onThoughtsChanged;
+  final CaptureViewModel captureViewModel;
   final int refreshVersion;
 
   @override
@@ -32,7 +35,6 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   String? _activeAudioPath;
   bool _playbackPaused = false;
   String? _deletingAudioPath;
-  int? _retryingDraftId;
   List<CaptureDraft> _drafts = [];
   bool _loading = true;
   bool _loadFailed = false;
@@ -110,25 +112,12 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     }
   }
 
-  Future<void> _retryDraft(CaptureDraft draft) async {
+  void _retryDraft(CaptureDraft draft) {
     final draftId = draft.id;
 
     if (draftId == null) return;
 
-    if (_retryingDraftId != null) return;
-
-    setState(() => _retryingDraftId = draftId);
-
-    try {
-      await widget.onRetryTranscription(draftId);
-
-      if (!mounted) return;
-      await _loadDrafts();
-    } finally {
-      if (mounted) {
-        setState(() => _retryingDraftId = null);
-      }
-    }
+    unawaited(widget.onRetryTranscription(draftId));
   }
 
   Future<void> _organizeDraft(CaptureDraft draft) async {
@@ -229,6 +218,14 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   }
 
   Future<void> _deleteDraft(CaptureDraft draft) async {
+    final draftId = draft.id;
+
+    if (draftId != null && widget.captureViewModel.activeDraftId == draftId) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('正在转写，暂时不能删除这条录音')));
+      return;
+    }
     final confirmed =
         await showDialog<bool>(
           context: context,
@@ -252,6 +249,10 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
         false;
 
     if (!confirmed || !mounted) return;
+
+    if (draftId != null) {
+      widget.captureViewModel.cancelQueuedDraft(draftId);
+    }
 
     setState(() => _deletingAudioPath = draft.audioPath);
 
@@ -324,7 +325,14 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('闪念收集箱')),
-      body: SafeArea(child: _buildBody()),
+      body: SafeArea(
+        child: ListenableBuilder(
+          listenable: widget.captureViewModel,
+          builder: (context, child) {
+            return _buildBody();
+          },
+        ),
+      ),
     );
   }
 
@@ -372,6 +380,12 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   }
 
   Widget _buildDraftCard(CaptureDraft draft) {
+    final draftId = draft.id;
+    final isActive =
+        draftId != null && widget.captureViewModel.activeDraftId == draftId;
+    final queuePosition = draftId == null
+        ? null
+        : widget.captureViewModel.queuePositionFor(draftId);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -393,7 +407,11 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _statusIcon(draft.transcriptionStatus),
+                        _statusIcon(
+                          draft,
+                          isActive: isActive,
+                          queuePosition: queuePosition,
+                        ),
                         size: 16,
                         color: Theme.of(
                           context,
@@ -401,7 +419,11 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        _statusLabel(draft),
+                        _statusLabel(
+                          draft,
+                          isActive: isActive,
+                          queuePosition: queuePosition,
+                        ),
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: Theme.of(
@@ -468,7 +490,13 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
               ],
             ),
             const SizedBox(height: 12),
-            Text(_draftDescription(draft)),
+            Text(
+              _draftDescription(
+                draft,
+                isActive: isActive,
+                queuePosition: queuePosition,
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -494,26 +522,36 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                   ),
                 ),
                 const SizedBox(width: 30),
-                if (draft.transcriptionStatus ==
+                if (isActive)
+                  FilledButton.icon(
+                    onPressed: null,
+                    icon: const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    label: const Text('转写中'),
+                  )
+                else if (queuePosition != null)
+                  OutlinedButton.icon(
+                    onPressed: draftId == null
+                        ? null
+                        : () {
+                            widget.captureViewModel.cancelQueuedDraft(draftId);
+                          },
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('取消排队'),
+                  )
+                else if (draft.transcriptionStatus ==
                         CaptureTranscriptionStatus.pending ||
                     draft.transcriptionStatus ==
                         CaptureTranscriptionStatus.failed)
                   FilledButton.icon(
-                    onPressed: _retryingDraftId == draft.id
-                        ? null
-                        : () => _retryDraft(draft),
-                    icon: _retryingDraftId == draft.id
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh_outlined),
+                    onPressed: () => _retryDraft(draft),
+                    icon: const Icon(Icons.refresh_outlined),
                     label: Text(
-                      _retryingDraftId == draft.id
-                          ? '转写中'
-                          : draft.transcriptionStatus ==
-                                CaptureTranscriptionStatus.pending
+                      draft.transcriptionStatus ==
+                              CaptureTranscriptionStatus.pending
                           ? '开始转写'
                           : '重新转写',
                     ),
@@ -544,7 +582,23 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     );
   }
 
-  String _draftDescription(CaptureDraft draft) {
+  String _draftDescription(
+    CaptureDraft draft, {
+    required bool isActive,
+    required int? queuePosition,
+  }) {
+    if (isActive) {
+      return '正在使用本地模型转写';
+    }
+
+    if (queuePosition != null) {
+      final tasksAhead = queuePosition - 1;
+
+      return tasksAhead == 0
+          ? '已进入队列，当前任务结束后开始'
+          : '已进入队列，前面还有 $tasksAhead 个等待任务';
+    }
+
     switch (draft.transcriptionStatus) {
       case CaptureTranscriptionStatus.pending:
         return '原始录音已保存，等待转写';
@@ -560,9 +614,21 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     }
   }
 
-  String _statusLabel(CaptureDraft draft) {
+  String _statusLabel(
+    CaptureDraft draft, {
+    required bool isActive,
+    required int? queuePosition,
+  }) {
     if (draft.convertedThoughtId != null) {
       return '已整理';
+    }
+
+    if (isActive) {
+      return '转写中';
+    }
+
+    if (queuePosition != null) {
+      return '排队第 $queuePosition 位';
     }
 
     switch (draft.transcriptionStatus) {
@@ -577,8 +643,20 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     }
   }
 
-  IconData _statusIcon(CaptureTranscriptionStatus status) {
-    switch (status) {
+  IconData _statusIcon(
+    CaptureDraft draft, {
+    required bool isActive,
+    required int? queuePosition,
+  }) {
+    if (isActive) {
+      return Icons.graphic_eq_outlined;
+    }
+
+    if (queuePosition != null) {
+      return Icons.hourglass_top_rounded;
+    }
+
+    switch (draft.transcriptionStatus) {
       case CaptureTranscriptionStatus.pending:
         return Icons.schedule_outlined;
       case CaptureTranscriptionStatus.transcribing:

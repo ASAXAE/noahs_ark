@@ -539,7 +539,7 @@ discarded.
   passed both jobs: Backend unit tests in 14 seconds and Flutter checks in
   2 minutes 5 seconds. This completes basic CI; automated deployment and
   release delivery remain future work
-- [ ] Day 53: add a user-visible transcription queue. Allow additional drafts to
+- [x] Day 53: add a user-visible transcription queue. Allow additional drafts to
   be submitted while one is running, but execute recognition serially through
   one reusable worker/model. Show waiting, queued, transcribing, failed and
   completed states per draft, prevent duplicate submissions and continue after
@@ -552,7 +552,18 @@ discarded.
   do not equate a Dart worker isolate with Android background execution support.
   Introduce `CaptureViewModel` as the owner of transcription-queue state and
   commands, and migrate capture UI state into it incrementally instead of adding
-  more page-local flags
+  more page-local flags. `CaptureViewModel` now owns the in-memory FIFO queue,
+  active draft ID, duplicate prevention, serial drain loop and queue-drained
+  notification. `CaptureInboxPage` observes that state to show the active task
+  and numbered waiting positions, cancel queued drafts and block deletion of the
+  audio file currently being transcribed. Deleting a queued draft removes it
+  from the queue before deleting its local file. On startup, unfinished
+  `transcribing` rows are restored to an explicit retryable failure state rather
+  than resumed silently. The full Flutter test suite and `flutter analyze`
+  passed. Android physical-device verification passed for serial queue order,
+  visible positions, duplicate prevention, queued cancellation, active-task
+  deletion protection, result-to-audio matching and the single queue-completion
+  dialog
 - [ ] Day 54: establish a formal database migration mechanism
 - [ ] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
   and a Docker build
@@ -648,12 +659,12 @@ must remain independent of the currently visible page.
   alone must not be treated as proof of a recording failure.
 - Playback feedback: show a seekable progress bar with current position and total
   duration on Day 61. Keep its position synchronized with the actual player.
-- Transcription submission: Day 53 replaces the current single-submission guard
-  with a visible queue; it does not run multiple recognizers concurrently. While
-  the guard remains, give clear busy feedback or visibly disable unavailable
-  actions instead of accepting a tap with no explanation. Successful drafts
-  currently proceed to organization; successful-result retranscription is a
-  separate future action requiring a clear policy for replacing existing text.
+- Transcription submission: Day 53 replaced the single-submission guard with an
+  in-memory, user-visible FIFO queue. It keeps one active recognizer, shows each
+  waiting position, prevents duplicate submissions and emits one completion
+  dialog only after the queue drains. Successful drafts proceed to organization;
+  successful-result retranscription remains a separate future action requiring
+  a clear policy for replacing existing text.
 - Future input direction: the user envisions two Flash Thought capture methods:
   audio recording and brain-computer interface (BCI / 脑机接口) device input.
   After Day 84, schedule a separate feasibility milestone before implementation:
@@ -706,8 +717,8 @@ ArkDatabase + audio services + model manager + TranscriptionWorker
   without depending on widgets or BuildContext.
 
 The current `CaptureController` is a transition point rather than the final
-architecture. Day 53 first moves queue state and commands into
-`CaptureViewModel`; Day 56 introduces `CaptureRepository` while recording
+architecture. Day 53 moved queue state and commands into `CaptureViewModel`;
+Day 56 introduces `CaptureRepository` while recording
 ownership is redesigned; Day 60–61 completes the View boundary as capture and
 playback UI move under Flash Thought. Keep constructor-based dependencies and
 well-defined interfaces so each responsibility can be tested independently.
@@ -772,9 +783,10 @@ interruption fallback, offline transcription, conversion and navigation checks
 above provide the manual acceptance evidence for `v0.2.0-flash-mvp`.
 
 Days are learning work units rather than guaranteed calendar-day estimates.
-Day 52 completed basic CI before the Day 53 transcription queue and
-`CaptureViewModel` work. Day 54 adds formal database migrations, and Day 55 then
-extends CI with PostgreSQL, migrations, integration tests and a Docker build.
+Day 52 completed basic CI and Day 53 completed the transcription queue and
+`CaptureViewModel` ownership step. Day 54 adds formal database migrations, and
+Day 55 then extends CI with PostgreSQL, migrations, integration tests and a
+Docker build.
 Day 56–59 adds background recording and Day 60–61 adds capture-entry and playback
 UX work. Account work starts on Day 62, the cloud-foundation release gate is Day
 76, and optional sync is Day 77–84. Future unchecked tasks remain plans.

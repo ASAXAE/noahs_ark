@@ -31,6 +31,10 @@ class CaptureController {
     return ArkDatabase.instance.insertCaptureDraft(draft);
   }
 
+  Future<int> recoverInterruptedTranscriptions() {
+    return ArkDatabase.instance.recoverInterruptedCaptureDrafts();
+  }
+
   Future<bool> playRecording(String filePath) {
     return _audioPlaybackService.play(filePath);
   }

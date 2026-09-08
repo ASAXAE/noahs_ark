@@ -121,6 +121,21 @@ class ArkDatabase {
     await db.update('capture_drafts', values, where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<int> recoverInterruptedCaptureDrafts() async {
+    final db = await database;
+
+    return db.update(
+      'capture_drafts',
+      {
+        'transcription_status': CaptureTranscriptionStatus.failed.name,
+        'transcription_error': '上次转写因应用关闭而中断，请重新开始',
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'transcription_status = ? AND converted_thought_id IS NULL',
+      whereArgs: [CaptureTranscriptionStatus.transcribing.name],
+    );
+  }
+
   Future<void> convertCaptureDraftToThought({
     required int draftId,
     required Thought thought,
