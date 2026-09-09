@@ -58,7 +58,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   - `DELETE /thoughts/:id`
 - Request validation with automated Node.js tests
 - `users` and `thoughts` tables connected by a foreign key
-- SQL migration files for reproducible database setup
+- Ordered, transactional PostgreSQL migrations tracked in
+  `schema_migrations` with SHA-256 checksums
 - Experimental `POST /auth/register` and `POST /auth/login` endpoints
 - Registration password policy enforced by both Flutter and Express: 8–72
   characters with at least one English letter and one number
@@ -293,18 +294,26 @@ JWT_EXPIRES_IN=1h
 
 Secrets in `backend/.env` are ignored by Git.
 
-### 3. Create the PostgreSQL tables
+### 3. Run PostgreSQL migrations
 
-Run these commands from the `backend` directory:
+Run the migration command from the `backend` directory:
 
 ```bash
-psql -U postgres -h localhost -d noahs_ark -f sql/001_create_users.sql
-psql -U postgres -h localhost -d noahs_ark -f sql/002_create_thoughts.sql
-psql -U postgres -h localhost -d noahs_ark -f sql/003_add_password_hash.sql
+npm run db:migrate
 ```
 
-The migration files create the schema only. Current Thought routes derive the
-user ID from the verified JWT instead of using a fixed database user.
+The runner loads numbered files from `backend/sql` in version order and records
+each successful migration in `schema_migrations`. Every migration runs inside a
+transaction. Repeated runs skip migrations that have already been applied, while
+the stored SHA-256 checksum detects later changes to migration history.
+
+Do not edit a migration after it has been applied. Add a new file using the next
+three-digit version instead. The existing migrations use `IF NOT EXISTS`, so the
+runner can safely take ownership of a database whose initial tables were created
+manually.
+
+Current Thought routes derive the user ID from the verified JWT instead of using
+a fixed database user.
 
 ### 4. Start Express
 
@@ -564,7 +573,14 @@ discarded.
   visible positions, duplicate prevention, queued cancellation, active-task
   deletion protection, result-to-audio matching and the single queue-completion
   dialog
-- [ ] Day 54: establish a formal database migration mechanism
+- [x] Day 54: establish a formal PostgreSQL database migration mechanism.
+  Discover and order numbered SQL files, track applied versions and SHA-256
+  checksums in `schema_migrations`, execute each pending migration in a
+  transaction and roll back failures. Add `npm run db:migrate` and automated
+  coverage for ordering, filename validation, duplicate versions, idempotence,
+  history changes and rollback. All 22 backend tests passed. PostgreSQL 18
+  verification applied migrations `001` through `003` on the first run and
+  reported the database up to date on the second run
 - [ ] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
   and a Docker build
 - [ ] Day 56: define recording-session ownership independently of page widgets,
@@ -783,10 +799,10 @@ interruption fallback, offline transcription, conversion and navigation checks
 above provide the manual acceptance evidence for `v0.2.0-flash-mvp`.
 
 Days are learning work units rather than guaranteed calendar-day estimates.
-Day 52 completed basic CI and Day 53 completed the transcription queue and
-`CaptureViewModel` ownership step. Day 54 adds formal database migrations, and
-Day 55 then extends CI with PostgreSQL, migrations, integration tests and a
-Docker build.
+Day 52 completed basic CI, Day 53 completed the transcription queue and
+`CaptureViewModel` ownership step, and Day 54 completed the formal PostgreSQL
+migration runner with automated and local-database verification. Day 55 next
+extends CI with PostgreSQL, migrations, integration tests and a Docker build.
 Day 56–59 adds background recording and Day 60–61 adds capture-entry and playback
 UX work. Account work starts on Day 62, the cloud-foundation release gate is Day
 76, and optional sync is Day 77–84. Future unchecked tasks remain plans.

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js",
+    "db:migrate": "node src/migrate.js",
+    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js",
     "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js"
   },
   "keywords": [],
