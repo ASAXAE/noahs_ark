@@ -35,6 +35,90 @@ jobs:
       - name: Run unit tests
         run: npm test
 
+  backend-integration:
+    name: Backend PostgreSQL integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_NAME: noahs_ark_test
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: day55-integration-test-secret-only
+      JWT_EXPIRES_IN: 1h
+      API_BASE_URL: http://127.0.0.1:3000
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: noahs_ark_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d noahs_ark_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run PostgreSQL migrations
+        run: npm run db:migrate
+
+      - name: Start API
+        run: node src/server.js > api.log 2>&1 &
+
+      - name: Wait for API and database
+        run: >-
+          curl --fail
+          --retry 10
+          --retry-delay 2
+          --retry-connrefused
+          http://127.0.0.1:3000/database-health
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Show API logs after failure
+        if: failure()
+        run: |
+          if [ -f api.log ]; then
+            cat api.log
+          fi
+
+  backend-docker-build:
+    name: Backend Docker build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Build backend image
+        run: docker build --tag noahs-ark-api:ci ./backend
+
   flutter-checks:
     name: Flutter checks
     runs-on: ubuntu-24.04

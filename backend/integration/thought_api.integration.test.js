@@ -1,4 +1,4 @@
-const { after, describe, test } = require("node:test");
+const { after, before, describe, test } = require("node:test");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 
@@ -10,11 +10,8 @@ const { createAccessToken } = require("../src/auth_token");
 const pool = require("../src/database");
 
 const baseUrl = process.env.API_BASE_URL || "http://127.0.0.1:3000";
-after(async () => {
-  await pool.end();
-});
 
-const accessToken = createAccessToken(1);
+let primaryAccount = null;
 
 function headersForToken(token, extraHeaders = {}) {
   return {
@@ -24,7 +21,7 @@ function headersForToken(token, extraHeaders = {}) {
 }
 
 function authenticatedHeaders(extraHeaders = {}) {
-  return headersForToken(accessToken, extraHeaders);
+  return headersForToken(primaryAccount.accessToken, extraHeaders);
 }
 
 async function createTestAccount(label) {
@@ -49,6 +46,22 @@ async function createTestAccount(label) {
     accessToken: createAccessToken(user.id),
   };
 }
+
+before(async () => {
+  primaryAccount = await createTestAccount("Primary");
+});
+
+after(async () => {
+  try {
+    if (primaryAccount !== null) {
+      await pool.query("DELETE FROM users WHERE id = $1", [
+        primaryAccount.user.id,
+      ]);
+    }
+  } finally {
+    await pool.end();
+  }
+});
 
 describe("Thought API", () => {
   test("rejects unauthenticated thought requests", async () => {
