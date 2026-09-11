@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../models/capture_recording_state.dart';
+import '../../repositories/capture_repository.dart';
 import '../../database/ark_database.dart';
 import '../../models/thought.dart';
 import '../thinking/thinking_page.dart';
@@ -13,7 +15,6 @@ import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
 import '../../services/transcription_model_manager.dart';
-import '../../controllers/capture_controller.dart';
 import '../capture/capture_inbox_page.dart';
 import '../shell/app_shell.dart';
 import 'widgets/home_hero.dart';
@@ -32,7 +33,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final _searchController = TextEditingController();
-  final _captureController = CaptureController();
+  final _captureRepository = CaptureRepository();
   late final CaptureViewModel _captureViewModel;
   bool _modelDownloadInProgress = false;
   final ValueNotifier<AuthSession?> _authSessionNotifier =
@@ -44,16 +45,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _favoritesOnly = false;
   bool _hasSearchText = false;
   String? _selectedTag;
-  bool _isRecording = false;
-  bool _recordingActionInProgress = false;
   bool _isAppInBackground = false;
   String? _pendingRecordingNotice;
   int _captureInboxRefreshVersion = 0;
   bool _queueCompletedDialogVisible = false;
 
+  CaptureRecordingState get _recordingState =>
+      _captureRepository.currentRecordingState;
+
+  bool get _isRecording => _recordingState.isRecording;
+
+  bool get _recordingActionInProgress => _recordingState.isActionInProgress;
+
   @override
   void initState() {
     super.initState();
+    _captureRepository.recordingState.addListener(_handleRecordingStateChanged);
     _captureViewModel = CaptureViewModel(
       runTranscription: _runQueuedTranscription,
       onQueueDrained: _showTranscriptionQueueCompletedDialog,
@@ -77,9 +84,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  void _handleRecordingStateChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _recoverInterruptedTranscriptions() async {
     try {
-      final recoveredCount = await _captureController
+      final recoveredCount = await _captureRepository
           .recoverInterruptedTranscriptions();
 
       if (!mounted || recoveredCount == 0) {
@@ -102,24 +115,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<int> _saveCaptureDraft(String audioPath) async {
-    final draftId = await _captureController.saveDraft(audioPath);
-
-    if (mounted) {
-      setState(() {
-        _captureInboxRefreshVersion++;
-      });
-    }
-
-    return draftId;
-  }
-
   Future<void> _prepareTranscriptionModel() async {
     if (_modelDownloadInProgress) {
       return;
     }
 
-    if (await _captureController.isTranscriptionModelInstalled()) {
+    if (await _captureRepository.isTranscriptionModelInstalled()) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(
@@ -180,7 +181,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
 
     try {
-      await _captureController.downloadTranscriptionModel();
+      await _captureRepository.downloadTranscriptionModel();
 
       if (!mounted) return;
 
@@ -197,15 +198,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<TranscriptionModelFiles?> _getTranscriptionModelFiles() async {
-    if (!await _captureController.isTranscriptionModelInstalled()) {
+    if (!await _captureRepository.isTranscriptionModelInstalled()) {
       await _prepareTranscriptionModel();
     }
 
-    if (!await _captureController.isTranscriptionModelInstalled()) {
+    if (!await _captureRepository.isTranscriptionModelInstalled()) {
       return null;
     }
 
-    return _captureController.getTranscriptionModelFiles();
+    return _captureRepository.getTranscriptionModelFiles();
   }
 
   Future<void> _queueCaptureDraft(int draftId) {
@@ -252,7 +253,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     var transcriptionStarted = false;
 
     try {
-      final draft = await ArkDatabase.instance.getCaptureDraft(draftId);
+      final draft = await _captureRepository.getCaptureDraft(draftId);
 
       if (draft == null) {
         if (mounted) {
@@ -271,7 +272,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
       transcriptionStarted = true;
 
-      await _captureController.transcribeDraft(
+      await _captureRepository.transcribeDraft(
         draft: draft,
         modelFiles: modelFiles,
       );
@@ -324,10 +325,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
 
-    setState(() => _recordingActionInProgress = true);
-
     try {
-      final saved = await _stopRecordingAndSave();
+      final saved = await _stopRecordingAndSave(interrupted: true);
 
       _pendingRecordingNotice = saved
           ? '应用进入后台，录音已自动停止并保存到闪念'
@@ -337,25 +336,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _pendingRecordingNotice = '自动停止或保存失败，请检查录音状态和闪念列表';
     } finally {
       if (mounted) {
-        setState(() => _recordingActionInProgress = false);
         _showPendingRecordingNotice();
       }
     }
   }
 
-  Future<bool> _stopRecordingAndSave() async {
-    final recordingPath = await _captureController.stopRecording();
+  Future<bool> _stopRecordingAndSave({bool interrupted = false}) async {
+    final draftId = interrupted
+        ? await _captureRepository.stopRecordingForInterruption()
+        : await _captureRepository.stopAndSaveRecording();
 
-    // 停止采集后立即更新状态，保存失败也不能继续显示录音中。
-    if (mounted) {
-      setState(() => _isRecording = false);
-    }
-
-    if (recordingPath == null) {
+    if (draftId == null) {
       return false;
     }
 
-    await _saveCaptureDraft(recordingPath);
+    if (mounted) {
+      setState(() {
+        _captureInboxRefreshVersion++;
+      });
+    }
+
     return true;
   }
 
@@ -363,8 +363,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_recordingActionInProgress) {
       return;
     }
-
-    setState(() => _recordingActionInProgress = true);
 
     try {
       if (_isRecording) {
@@ -381,18 +379,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return;
       }
 
-      final recordingPath = await _captureController.startRecording();
+      final started = await _captureRepository.startRecording();
 
       if (!mounted) return;
 
-      if (recordingPath == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('需要麦克风权限才能录制闪念')));
-        return;
-      }
+      if (!started) {
+        final permissionDenied =
+            _recordingState.failure == CaptureRecordingFailure.permissionDenied;
 
-      setState(() => _isRecording = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(permissionDenied ? '需要麦克风权限才能录制闪念' : '录音未能开始，请重试'),
+          ),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
 
@@ -400,12 +400,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         context,
       ).showSnackBar(const SnackBar(content: Text('录音操作失败，请重试')));
     } finally {
-      if (mounted) {
-        setState(() => _recordingActionInProgress = false);
-
-        if (_isAppInBackground && _isRecording) {
-          unawaited(_stopRecordingForBackground());
-        }
+      if (mounted && _isAppInBackground && _isRecording) {
+        unawaited(_stopRecordingForBackground());
       }
     }
   }
@@ -725,7 +721,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _captureViewModel.dispose();
-    unawaited(_captureController.dispose());
+    _captureRepository.recordingState.removeListener(
+      _handleRecordingStateChanged,
+    );
+    unawaited(_captureRepository.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();
     super.dispose();

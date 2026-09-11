@@ -581,16 +581,32 @@ discarded.
   history changes and rollback. All 22 backend tests passed. PostgreSQL 18
   verification applied migrations `001` through `003` on the first run and
   reported the database up to date on the second run
-- [ ] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
-  and a Docker build
-- [ ] Day 56: define recording-session ownership independently of page widgets,
+- [x] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
+  and a Docker build. CI now runs four independent jobs for Flutter checks,
+  backend unit tests, PostgreSQL integration and the backend Docker build. The
+  integration job starts PostgreSQL 17, applies the numbered migrations, waits
+  for `/database-health` and runs self-contained two-account API tests. Local
+  verification passed all 22 backend unit tests, all 7 integration tests, the
+  migration idempotence check and the Docker build. GitHub Actions
+  [run #5](https://github.com/ASAXAE/noahs_ark/actions/runs/34436677934)
+  passed all four jobs for commit `11da82b`
+- [x] Day 56: define recording-session ownership independently of page widgets,
   including permission checks, lifecycle transitions, interruption handling and
   recovery. Introduce `CaptureRepository` as the source of truth for capture
   drafts and recording/transcription operations. It coordinates `ArkDatabase`,
   audio services, model management and `TranscriptionWorker`; migrate callers
-  from the transitional `CaptureController` before removing that class. Select
-  an Android microphone foreground-service integration and establish one
-  authoritative recording state shared by the UI and service
+  from the transitional `CaptureController` before removing that class.
+  `CaptureRecordingState` now models permission, starting, recording, stopping,
+  interruption and failure states, while duplicate start/stop operations cannot
+  create duplicate drafts. Background interruption follows
+  `interrupted -> stopping -> idle` and preserves a single saved draft. The
+  repository's 7 focused tests and all 28 Flutter tests passed; Android
+  physical-device checks passed for manual stop/save, background auto-stop,
+  duplicate prevention, playable audio and permission denial.
+  `flutter_foreground_task` `^10.0.0` was selected for the Android microphone
+  foreground service while leaving its dependency and implementation to Day 57.
+  The repository recording state remains the authority observed by the UI and
+  future service integration
 - [ ] Day 57: implement user-initiated microphone foreground-service recording
   with a required recording notification. Verify continuous audio while switching
   apps or locking the screen; stopping must finalize local audio, save one draft

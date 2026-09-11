@@ -4,11 +4,22 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
-class AudioRecorderService {
+abstract interface class CaptureAudioRecorder {
+  Future<bool> requestPermission();
+
+  Future<String> startRecordingAfterPermissionGranted();
+
+  Future<String?> stopRecording();
+
+  Future<void> dispose();
+}
+
+class AudioRecorderService implements CaptureAudioRecorder {
   static const int _voiceSampleRate = 48000;
 
   final AudioRecorder _recorder = AudioRecorder();
 
+  @override
   Future<bool> requestPermission() {
     return _recorder.hasPermission();
   }
@@ -20,6 +31,11 @@ class AudioRecorderService {
       return null;
     }
 
+    return startRecordingAfterPermissionGranted();
+  }
+
+  @override
+  Future<String> startRecordingAfterPermissionGranted() async {
     final documentsDirectory = await getApplicationDocumentsDirectory();
     final audioDirectory = Directory(
       path.join(documentsDirectory.path, 'capture_audio'),
@@ -42,6 +58,7 @@ class AudioRecorderService {
     return filePath;
   }
 
+  @override
   Future<String?> stopRecording() {
     return _recorder.stop();
   }
@@ -68,6 +85,7 @@ class AudioRecorderService {
     return true;
   }
 
+  @override
   Future<void> dispose() {
     return _recorder.dispose();
   }
