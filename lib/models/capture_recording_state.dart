@@ -35,19 +35,15 @@ class CaptureRecordingState {
       failure = null;
 
   const CaptureRecordingState.recording({
-    required String audioPath,
-    required DateTime startedAt,
+    required String this.audioPath,
+    required DateTime this.startedAt,
   }) : phase = CaptureRecordingPhase.recording,
-       audioPath = audioPath,
-       startedAt = startedAt,
        failure = null;
 
   const CaptureRecordingState.stopping({
-    required String audioPath,
-    required DateTime startedAt,
+    required String this.audioPath,
+    required DateTime this.startedAt,
   }) : phase = CaptureRecordingPhase.stopping,
-       audioPath = audioPath,
-       startedAt = startedAt,
        failure = null;
 
   const CaptureRecordingState.interrupted({this.audioPath, this.startedAt})
@@ -55,11 +51,10 @@ class CaptureRecordingState {
       failure = null;
 
   const CaptureRecordingState.failed({
-    required CaptureRecordingFailure failure,
+    required CaptureRecordingFailure this.failure,
     this.audioPath,
     this.startedAt,
-  }) : phase = CaptureRecordingPhase.failed,
-       failure = failure;
+  }) : phase = CaptureRecordingPhase.failed;
 
   final CaptureRecordingPhase phase;
   final String? audioPath;
