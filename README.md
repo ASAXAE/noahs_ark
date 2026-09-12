@@ -607,10 +607,11 @@ discarded.
   foreground service while leaving its dependency and implementation to Day 57.
   The repository recording state remains the authority observed by the UI and
   future service integration
-- [ ] Day 57: implement user-initiated microphone foreground-service recording
-  with a required recording notification. Verify continuous audio while switching
-  apps or locking the screen; stopping must finalize local audio, save one draft
-  and end the service
+- [x] Day 57: implemented user-initiated Android microphone foreground-service
+  recording with a required recording notification. A debug APK build passed,
+  and physical-device testing confirmed continuous audio in the foreground,
+  after switching apps and while locked; stopping ended the service and saved
+  exactly one playable local draft
 - [ ] Day 58: add elapsed recording time and a Stop and Save action to the
   notification. Keep notification and in-app state consistent, including stopping
   from the notification and returning to the app without duplicate draft saves

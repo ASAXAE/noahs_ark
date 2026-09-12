@@ -31,7 +31,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+class _HomePageState extends State<HomePage> {
   final _searchController = TextEditingController();
   final _captureRepository = CaptureRepository();
   late final CaptureViewModel _captureViewModel;
@@ -45,8 +45,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _favoritesOnly = false;
   bool _hasSearchText = false;
   String? _selectedTag;
-  bool _isAppInBackground = false;
-  String? _pendingRecordingNotice;
   int _captureInboxRefreshVersion = 0;
   bool _queueCompletedDialogVisible = false;
 
@@ -66,22 +64,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       onQueueDrained: _showTranscriptionQueueCompletedDialog,
     );
     unawaited(_recoverInterruptedTranscriptions());
-    WidgetsBinding.instance.addObserver(this);
     _loadThoughts();
     _restoreAuthSession();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    debugPrint('应用生命周期：${state.name}');
-
-    if (state == AppLifecycleState.paused) {
-      _isAppInBackground = true;
-      unawaited(_stopRecordingForBackground());
-    } else if (state == AppLifecycleState.resumed) {
-      _isAppInBackground = false;
-      _showPendingRecordingNotice();
-    }
   }
 
   void _handleRecordingStateChanged() {
@@ -301,50 +285,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _showPendingRecordingNotice() {
-    if (!mounted ||
-        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
-      return;
-    }
-
-    final message = _pendingRecordingNotice;
-    if (message == null) return;
-
-    _pendingRecordingNotice = null;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _stopRecordingForBackground() async {
-    if (!mounted ||
-        !_isAppInBackground ||
-        !_isRecording ||
-        _recordingActionInProgress) {
-      return;
-    }
-
-    try {
-      final saved = await _stopRecordingAndSave(interrupted: true);
-
-      _pendingRecordingNotice = saved
-          ? '应用进入后台，录音已自动停止并保存到闪念'
-          : '录音已停止，但未获取到可保存的音频';
-    } catch (error) {
-      debugPrint('后台停止或保存录音失败：$error');
-      _pendingRecordingNotice = '自动停止或保存失败，请检查录音状态和闪念列表';
-    } finally {
-      if (mounted) {
-        _showPendingRecordingNotice();
-      }
-    }
-  }
-
-  Future<bool> _stopRecordingAndSave({bool interrupted = false}) async {
-    final draftId = interrupted
-        ? await _captureRepository.stopRecordingForInterruption()
-        : await _captureRepository.stopAndSaveRecording();
+  Future<bool> _stopRecordingAndSave() async {
+    final draftId = await _captureRepository.stopAndSaveRecording();
 
     if (draftId == null) {
       return false;
@@ -389,7 +331,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(permissionDenied ? '需要麦克风权限才能录制闪念' : '录音未能开始，请重试'),
+            content: Text(
+              permissionDenied ? '需要麦克风和通知权限才能在后台录制闪念' : '录音未能开始，请重试',
+            ),
           ),
         );
       }
@@ -399,10 +343,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('录音操作失败，请重试')));
-    } finally {
-      if (mounted && _isAppInBackground && _isRecording) {
-        unawaited(_stopRecordingForBackground());
-      }
     }
   }
 
@@ -719,7 +659,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _captureViewModel.dispose();
     _captureRepository.recordingState.removeListener(
       _handleRecordingStateChanged,

@@ -4,6 +4,7 @@ import '../database/ark_database.dart';
 import '../models/capture_draft.dart';
 import '../models/capture_recording_state.dart';
 import '../services/audio_recorder_service.dart';
+import '../services/foreground_audio_recorder_service.dart';
 import '../services/transcription_model_manager.dart';
 import '../services/transcription_worker.dart';
 
@@ -15,7 +16,8 @@ class CaptureRepository {
     Future<CaptureDraft?> Function(int id)? getCaptureDraft,
     Future<void> Function(CaptureDraft draft)? updateCaptureDraft,
     Future<int> Function()? recoverInterruptedCaptureDrafts,
-  }) : _audioRecorderService = audioRecorderService ?? AudioRecorderService(),
+  }) : _audioRecorderService =
+           audioRecorderService ?? ForegroundAudioRecorderService(),
        _transcriptionModelManager =
            transcriptionModelManager ?? TranscriptionModelManager(),
        _insertCaptureDraft =
