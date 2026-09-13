@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../database/ark_database.dart';
@@ -28,9 +29,16 @@ class CaptureRepository {
            updateCaptureDraft ?? ArkDatabase.instance.updateCaptureDraft,
        _recoverInterruptedCaptureDrafts =
            recoverInterruptedCaptureDrafts ??
-           ArkDatabase.instance.recoverInterruptedCaptureDrafts;
+           ArkDatabase.instance.recoverInterruptedCaptureDrafts {
+    _externallyStoppedRecordingSubscription = _audioRecorderService
+        .externallyStoppedRecordingPaths
+        .listen((audioPath) {
+          unawaited(_saveExternallyStoppedRecording(audioPath));
+        });
+  }
 
   final CaptureAudioRecorder _audioRecorderService;
+  late final StreamSubscription<String> _externallyStoppedRecordingSubscription;
   final Future<int> Function(CaptureDraft draft) _insertCaptureDraft;
 
   final TranscriptionModelManager _transcriptionModelManager;
@@ -99,6 +107,38 @@ class CaptureRepository {
 
   Future<int?> stopRecordingForInterruption() {
     return _stopAndSaveRecording(interrupted: true);
+  }
+
+  Future<void> _saveExternallyStoppedRecording(String audioPath) async {
+    final recording = currentRecordingState;
+    final startedAt = recording.startedAt;
+
+    if (_disposed ||
+        !recording.canStop ||
+        recording.audioPath != audioPath ||
+        startedAt == null) {
+      return;
+    }
+
+    _setRecordingState(
+      CaptureRecordingState.stopping(
+        audioPath: audioPath,
+        startedAt: startedAt,
+      ),
+    );
+
+    try {
+      await _saveDraft(audioPath);
+      _setRecordingState(const CaptureRecordingState.idle());
+    } catch (_) {
+      _setRecordingState(
+        CaptureRecordingState.failed(
+          failure: CaptureRecordingFailure.saveFailed,
+          audioPath: audioPath,
+          startedAt: startedAt,
+        ),
+      );
+    }
   }
 
   Future<int?> _stopAndSaveRecording({required bool interrupted}) async {
@@ -272,6 +312,7 @@ class CaptureRepository {
     }
 
     _disposed = true;
+    await _externallyStoppedRecordingSubscription.cancel();
     await _transcriptionWorker?.dispose();
     _transcriptionModelManager.dispose();
     await _audioRecorderService.dispose();

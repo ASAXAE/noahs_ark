@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:noahs_ark_app/models/capture_recording_state.dart';
 import 'package:noahs_ark_app/repositories/capture_repository.dart';
@@ -80,6 +82,37 @@ void main() {
       expect(await repository.stopAndSaveRecording(), 42);
 
       expect(recorder.stopCalls, 1);
+      expect(savedDraft?.audioPath, '/capture/test.wav');
+      expect(
+        repository.currentRecordingState.phase,
+        CaptureRecordingPhase.idle,
+      );
+    });
+
+    test('saves an externally stopped recording exactly once', () async {
+      final recorder = _FakeCaptureAudioRecorder();
+      CaptureDraft? savedDraft;
+      var insertCalls = 0;
+
+      final repository = CaptureRepository(
+        audioRecorderService: recorder,
+        insertCaptureDraft: (draft) async {
+          insertCalls++;
+          savedDraft = draft;
+          return 42;
+        },
+      );
+      addTearDown(repository.dispose);
+
+      expect(await repository.startRecording(), isTrue);
+
+      recorder.stopExternally();
+      recorder.stopExternally();
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(recorder.stopCalls, 0);
+      expect(insertCalls, 1);
       expect(savedDraft?.audioPath, '/capture/test.wav');
       expect(
         repository.currentRecordingState.phase,
@@ -183,6 +216,17 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   int startCalls = 0;
   int stopCalls = 0;
 
+  final StreamController<String> _externallyStoppedRecordingPathsController =
+      StreamController<String>.broadcast(sync: true);
+
+  @override
+  Stream<String> get externallyStoppedRecordingPaths =>
+      _externallyStoppedRecordingPathsController.stream;
+
+  void stopExternally([String audioPath = '/capture/test.wav']) {
+    _externallyStoppedRecordingPathsController.add(audioPath);
+  }
+
   @override
   Future<bool> requestPermission() async {
     return permissionGranted;
@@ -206,5 +250,7 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   }
 
   @override
-  Future<void> dispose() async {}
+  Future<void> dispose() {
+    return _externallyStoppedRecordingPathsController.close();
+  }
 }

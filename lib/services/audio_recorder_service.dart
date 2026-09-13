@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
 abstract interface class CaptureAudioRecorder {
+  Stream<String> get externallyStoppedRecordingPaths;
+
   Future<bool> requestPermission();
 
   Future<String> startRecordingAfterPermissionGranted();
@@ -18,6 +20,10 @@ class AudioRecorderService implements CaptureAudioRecorder {
   static const int _voiceSampleRate = 48000;
 
   final AudioRecorder _recorder = AudioRecorder();
+
+  @override
+  Stream<String> get externallyStoppedRecordingPaths =>
+      const Stream<String>.empty();
 
   @override
   Future<bool> requestPermission() {

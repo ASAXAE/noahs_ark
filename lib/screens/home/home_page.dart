@@ -48,6 +48,8 @@ class _HomePageState extends State<HomePage> {
   int _captureInboxRefreshVersion = 0;
   bool _queueCompletedDialogVisible = false;
 
+  CaptureRecordingPhase _previousRecordingPhase = CaptureRecordingPhase.idle;
+
   CaptureRecordingState get _recordingState =>
       _captureRepository.currentRecordingState;
 
@@ -69,9 +71,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _handleRecordingStateChanged() {
-    if (mounted) {
-      setState(() {});
+    final currentPhase = _recordingState.phase;
+    final recordingSaved =
+        _previousRecordingPhase == CaptureRecordingPhase.stopping &&
+        currentPhase == CaptureRecordingPhase.idle;
+
+    _previousRecordingPhase = currentPhase;
+
+    if (!mounted) {
+      return;
     }
+
+    setState(() {
+      if (recordingSaved) {
+        _captureInboxRefreshVersion++;
+      }
+    });
   }
 
   Future<void> _recoverInterruptedTranscriptions() async {
@@ -287,18 +302,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<bool> _stopRecordingAndSave() async {
     final draftId = await _captureRepository.stopAndSaveRecording();
-
-    if (draftId == null) {
-      return false;
-    }
-
-    if (mounted) {
-      setState(() {
-        _captureInboxRefreshVersion++;
-      });
-    }
-
-    return true;
+    return draftId != null;
   }
 
   Future<void> _toggleRecording() async {

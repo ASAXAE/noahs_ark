@@ -37,7 +37,7 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
         playSound: false,
       ),
       foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.nothing(),
+        eventAction: ForegroundTaskEventAction.repeat(1000),
         autoRunOnBoot: false,
         autoRunOnMyPackageReplaced: false,
         allowWakeLock: true,
@@ -52,10 +52,16 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
 
   late final void Function(Object) _taskDataCallback = _onReceiveTaskData;
 
+  final StreamController<String> _externallyStoppedRecordingPathsController =
+      StreamController<String>.broadcast(sync: true);
   Completer<String>? _startCompleter;
   Completer<String?>? _stopCompleter;
   String? _activeAudioPath;
   bool _disposed = false;
+
+  @override
+  Stream<String> get externallyStoppedRecordingPaths =>
+      _externallyStoppedRecordingPathsController.stream;
 
   @override
   Future<bool> requestPermission() async {
@@ -206,10 +212,20 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
     }
 
     if (event == foregroundRecordingStoppedEvent) {
+      final stoppedAudioPath = audioPath is String
+          ? audioPath
+          : _activeAudioPath;
       final completer = _stopCompleter;
 
       if (completer != null && !completer.isCompleted) {
-        completer.complete(audioPath is String ? audioPath : _activeAudioPath);
+        completer.complete(stoppedAudioPath);
+        return;
+      }
+
+      if (stoppedAudioPath != null && !_disposed) {
+        _activeAudioPath = null;
+        _externallyStoppedRecordingPathsController.add(stoppedAudioPath);
+        unawaited(_finishExternallyStoppedRecording());
       }
 
       return;
@@ -233,6 +249,13 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
         stopCompleter.completeError(error);
       }
     }
+  }
+
+  Future<void> _finishExternallyStoppedRecording() async {
+    await FlutterForegroundTask.removeData(
+      key: foregroundRecordingAudioPathKey,
+    );
+    await _stopForegroundServiceIfRunning();
   }
 
   Future<void> _stopForegroundServiceIfRunning() async {
@@ -264,6 +287,7 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
       FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback);
     }
 
+    await _externallyStoppedRecordingPathsController.close();
     await _fallbackRecorder.dispose();
   }
 }

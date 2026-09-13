@@ -612,9 +612,15 @@ discarded.
   and physical-device testing confirmed continuous audio in the foreground,
   after switching apps and while locked; stopping ended the service and saved
   exactly one playable local draft
-- [ ] Day 58: add elapsed recording time and a Stop and Save action to the
-  notification. Keep notification and in-app state consistent, including stopping
-  from the notification and returning to the app without duplicate draft saves
+- [x] Day 58: added elapsed recording time and a Stop and Save action to the
+  notification. Notification and in-app stops now converge on the repository's
+  recording state, refresh the capture inbox after saving and prevent duplicate
+  draft creation. All 8 focused repository tests and `flutter analyze` passed.
+  Android physical-device verification passed for elapsed-time updates,
+  notification stop/save, in-app stop/save, returning to the app, exactly one
+  playable draft and notification cleanup. A Profile build also started its
+  first recording in under one second; the earlier cold-start delay was limited
+  to Debug mode
 - [ ] Day 59: verify background recording on physical Android devices, covering
   lock screen, long recordings, microphone contention, permission changes and
   process termination. Recover usable saved audio where possible and surface
