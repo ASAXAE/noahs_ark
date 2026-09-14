@@ -199,6 +199,117 @@ void main() {
       expect(recorder.stopCalls, 1);
       expect(insertCalls, 1);
     });
+
+    test('reconnects an active foreground recording', () async {
+      final startedAt = DateTime(2026, 9, 14, 9, 30);
+      final recorder = _FakeCaptureAudioRecorder(
+        pendingRecovery: CaptureRecordingRecovery(
+          kind: CaptureRecordingRecoveryKind.active,
+          audioPath: '/capture/active.wav',
+          startedAt: startedAt,
+        ),
+      );
+      final repository = CaptureRepository(audioRecorderService: recorder);
+      addTearDown(repository.dispose);
+
+      final outcome = await repository.recoverPendingRecording();
+
+      expect(outcome, CaptureRecordingRecoveryOutcome.active);
+      expect(repository.currentRecordingState.isRecording, isTrue);
+      expect(repository.currentRecordingState.audioPath, '/capture/active.wav');
+      expect(repository.currentRecordingState.startedAt, startedAt);
+      expect(recorder.clearPendingCalls, 0);
+    });
+
+    test('saves a recovered recording once and clears its marker', () async {
+      final startedAt = DateTime(2026, 9, 14, 9, 30);
+      final recorder = _FakeCaptureAudioRecorder(
+        pendingRecovery: CaptureRecordingRecovery(
+          kind: CaptureRecordingRecoveryKind.recovered,
+          audioPath: '/capture/interrupted_recovered.wav',
+          startedAt: startedAt,
+        ),
+      );
+      CaptureDraft? savedDraft;
+      var insertCalls = 0;
+      final repository = CaptureRepository(
+        audioRecorderService: recorder,
+        getCaptureDraftByAudioPath: (_) async => null,
+        insertCaptureDraft: (draft) async {
+          insertCalls++;
+          savedDraft = draft;
+          return 42;
+        },
+      );
+      addTearDown(repository.dispose);
+
+      final outcome = await repository.recoverPendingRecording();
+
+      expect(outcome, CaptureRecordingRecoveryOutcome.recovered);
+      expect(insertCalls, 1);
+      expect(savedDraft?.audioPath, '/capture/interrupted_recovered.wav');
+      expect(savedDraft?.createdAt, startedAt);
+      expect(recorder.clearPendingCalls, 1);
+      expect(
+        repository.currentRecordingState.phase,
+        CaptureRecordingPhase.idle,
+      );
+    });
+
+    test('does not duplicate an already recovered draft', () async {
+      final startedAt = DateTime(2026, 9, 14, 9, 30);
+      const recoveredPath = '/capture/interrupted_recovered.wav';
+      final recorder = _FakeCaptureAudioRecorder(
+        pendingRecovery: CaptureRecordingRecovery(
+          kind: CaptureRecordingRecoveryKind.recovered,
+          audioPath: recoveredPath,
+          startedAt: startedAt,
+        ),
+      );
+      var insertCalls = 0;
+      final repository = CaptureRepository(
+        audioRecorderService: recorder,
+        getCaptureDraftByAudioPath: (_) async => CaptureDraft(
+          id: 7,
+          audioPath: recoveredPath,
+          createdAt: startedAt,
+          updatedAt: startedAt,
+        ),
+        insertCaptureDraft: (draft) async {
+          insertCalls++;
+          return 42;
+        },
+      );
+      addTearDown(repository.dispose);
+
+      final outcome = await repository.recoverPendingRecording();
+
+      expect(outcome, CaptureRecordingRecoveryOutcome.recovered);
+      expect(insertCalls, 0);
+      expect(recorder.clearPendingCalls, 1);
+    });
+
+    test('reports an unavailable interrupted recording once', () async {
+      final startedAt = DateTime(2026, 9, 14, 9, 30);
+      final recorder = _FakeCaptureAudioRecorder(
+        pendingRecovery: CaptureRecordingRecovery(
+          kind: CaptureRecordingRecoveryKind.unavailable,
+          audioPath: '/capture/empty.wav',
+          startedAt: startedAt,
+        ),
+      );
+      final repository = CaptureRepository(audioRecorderService: recorder);
+      addTearDown(repository.dispose);
+
+      final outcome = await repository.recoverPendingRecording();
+
+      expect(outcome, CaptureRecordingRecoveryOutcome.unavailable);
+      expect(
+        repository.currentRecordingState.phase,
+        CaptureRecordingPhase.interrupted,
+      );
+      expect(recorder.clearPendingCalls, 1);
+    });
   });
 }
 
@@ -207,14 +318,17 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
     this.permissionGranted = true,
     this.startError,
     this.stopPath = '/capture/test.wav',
+    this.pendingRecovery,
   });
 
   final bool permissionGranted;
   final Object? startError;
   final String? stopPath;
+  CaptureRecordingRecovery? pendingRecovery;
 
   int startCalls = 0;
   int stopCalls = 0;
+  int clearPendingCalls = 0;
 
   final StreamController<String> _externallyStoppedRecordingPathsController =
       StreamController<String>.broadcast(sync: true);
@@ -247,6 +361,17 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   Future<String?> stopRecording() async {
     stopCalls++;
     return stopPath;
+  }
+
+  @override
+  Future<CaptureRecordingRecovery?> recoverPendingRecording() async {
+    return pendingRecovery;
+  }
+
+  @override
+  Future<void> clearPendingRecording() async {
+    clearPendingCalls++;
+    pendingRecovery = null;
   }
 
   @override

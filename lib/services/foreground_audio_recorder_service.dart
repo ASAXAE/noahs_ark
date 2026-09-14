@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'audio_recorder_service.dart';
 import 'foreground_recording_task_handler.dart';
+import 'wav_recording_recovery.dart';
 
 class ForegroundAudioRecorderService implements CaptureAudioRecorder {
   ForegroundAudioRecorderService() {
@@ -43,12 +44,13 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
         allowWakeLock: true,
         allowWifiLock: false,
         allowAutoRestart: false,
-        stopWithTask: false,
+        stopWithTask: true,
       ),
     );
   }
 
   final AudioRecorderService _fallbackRecorder = AudioRecorderService();
+  final WavRecordingRecovery _wavRecovery = const WavRecordingRecovery();
 
   late final void Function(Object) _taskDataCallback = _onReceiveTaskData;
 
@@ -179,10 +181,81 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
       await _stopForegroundServiceIfRunning();
       _stopCompleter = null;
       _activeAudioPath = null;
-      await FlutterForegroundTask.removeData(
-        key: foregroundRecordingAudioPathKey,
+    }
+  }
+
+  @override
+  Future<CaptureRecordingRecovery?> recoverPendingRecording() async {
+    _ensureNotDisposed();
+
+    if (!Platform.isAndroid) {
+      return null;
+    }
+
+    final savedAudioPath = await FlutterForegroundTask.getData<String>(
+      key: foregroundRecordingAudioPathKey,
+    );
+    final serviceRunning = await FlutterForegroundTask.isRunningService;
+
+    if (savedAudioPath == null || savedAudioPath.isEmpty) {
+      if (serviceRunning) {
+        return null;
+      }
+
+      final documentsDirectory = await getApplicationDocumentsDirectory();
+      final recoveredPath = await _wavRecovery.recoverNewestUnfinishedIn(
+        Directory(path.join(documentsDirectory.path, 'capture_audio')),
+      );
+
+      if (recoveredPath == null) {
+        return null;
+      }
+
+      return CaptureRecordingRecovery(
+        kind: CaptureRecordingRecoveryKind.recovered,
+        audioPath: recoveredPath,
+        startedAt: await _recordingStartedAt(recoveredPath),
       );
     }
+
+    final audioPath = savedAudioPath;
+    final startedAt = await _recordingStartedAt(audioPath);
+
+    if (serviceRunning) {
+      _activeAudioPath = audioPath;
+      return CaptureRecordingRecovery(
+        kind: CaptureRecordingRecoveryKind.active,
+        audioPath: audioPath,
+        startedAt: startedAt,
+      );
+    }
+
+    final recoveredPath = await _wavRecovery.recover(audioPath);
+
+    if (recoveredPath == null) {
+      return CaptureRecordingRecovery(
+        kind: CaptureRecordingRecoveryKind.unavailable,
+        audioPath: audioPath,
+        startedAt: startedAt,
+      );
+    }
+
+    return CaptureRecordingRecovery(
+      kind: CaptureRecordingRecoveryKind.recovered,
+      audioPath: recoveredPath,
+      startedAt: startedAt,
+    );
+  }
+
+  @override
+  Future<void> clearPendingRecording() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    await FlutterForegroundTask.removeData(
+      key: foregroundRecordingAudioPathKey,
+    );
   }
 
   void _onReceiveTaskData(Object data) {
@@ -252,10 +325,23 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
   }
 
   Future<void> _finishExternallyStoppedRecording() async {
-    await FlutterForegroundTask.removeData(
-      key: foregroundRecordingAudioPathKey,
-    );
     await _stopForegroundServiceIfRunning();
+  }
+
+  Future<DateTime> _recordingStartedAt(String audioPath) async {
+    final fileName = path.basenameWithoutExtension(audioPath);
+    final match = RegExp(r'^capture_(\d+)').firstMatch(fileName);
+    final microseconds = match == null ? null : int.tryParse(match.group(1)!);
+
+    if (microseconds != null) {
+      return DateTime.fromMicrosecondsSinceEpoch(microseconds);
+    }
+
+    try {
+      return await File(audioPath).lastModified();
+    } catch (_) {
+      return DateTime.now();
+    }
   }
 
   Future<void> _stopForegroundServiceIfRunning() async {
@@ -283,7 +369,9 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
     _disposed = true;
 
     if (Platform.isAndroid) {
-      await _stopForegroundServiceIfRunning();
+      if (_activeAudioPath == null) {
+        await _stopForegroundServiceIfRunning();
+      }
       FlutterForegroundTask.removeTaskDataCallback(_taskDataCallback);
     }
 

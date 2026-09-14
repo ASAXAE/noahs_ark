@@ -9,12 +9,16 @@ import '../services/foreground_audio_recorder_service.dart';
 import '../services/transcription_model_manager.dart';
 import '../services/transcription_worker.dart';
 
+enum CaptureRecordingRecoveryOutcome { none, active, recovered, unavailable }
+
 class CaptureRepository {
   CaptureRepository({
     CaptureAudioRecorder? audioRecorderService,
     TranscriptionModelManager? transcriptionModelManager,
     Future<int> Function(CaptureDraft draft)? insertCaptureDraft,
     Future<CaptureDraft?> Function(int id)? getCaptureDraft,
+    Future<CaptureDraft?> Function(String audioPath)?
+    getCaptureDraftByAudioPath,
     Future<void> Function(CaptureDraft draft)? updateCaptureDraft,
     Future<int> Function()? recoverInterruptedCaptureDrafts,
   }) : _audioRecorderService =
@@ -25,6 +29,9 @@ class CaptureRepository {
            insertCaptureDraft ?? ArkDatabase.instance.insertCaptureDraft,
        _getCaptureDraft =
            getCaptureDraft ?? ArkDatabase.instance.getCaptureDraft,
+       _getCaptureDraftByAudioPath =
+           getCaptureDraftByAudioPath ??
+           ArkDatabase.instance.getCaptureDraftByAudioPath,
        _updateCaptureDraft =
            updateCaptureDraft ?? ArkDatabase.instance.updateCaptureDraft,
        _recoverInterruptedCaptureDrafts =
@@ -43,6 +50,8 @@ class CaptureRepository {
 
   final TranscriptionModelManager _transcriptionModelManager;
   final Future<CaptureDraft?> Function(int id) _getCaptureDraft;
+  final Future<CaptureDraft?> Function(String audioPath)
+  _getCaptureDraftByAudioPath;
   final Future<void> Function(CaptureDraft draft) _updateCaptureDraft;
   final Future<int> Function() _recoverInterruptedCaptureDrafts;
 
@@ -109,6 +118,59 @@ class CaptureRepository {
     return _stopAndSaveRecording(interrupted: true);
   }
 
+  Future<CaptureRecordingRecoveryOutcome> recoverPendingRecording() async {
+    if (_disposed || !currentRecordingState.canStart) {
+      return CaptureRecordingRecoveryOutcome.none;
+    }
+
+    _setRecordingState(const CaptureRecordingState.starting());
+
+    try {
+      final recovery = await _audioRecorderService.recoverPendingRecording();
+
+      if (recovery == null) {
+        _setRecordingState(const CaptureRecordingState.idle());
+        return CaptureRecordingRecoveryOutcome.none;
+      }
+
+      if (recovery.kind == CaptureRecordingRecoveryKind.active) {
+        _setRecordingState(
+          CaptureRecordingState.recording(
+            audioPath: recovery.audioPath,
+            startedAt: recovery.startedAt,
+          ),
+        );
+        return CaptureRecordingRecoveryOutcome.active;
+      }
+
+      if (recovery.kind == CaptureRecordingRecoveryKind.unavailable) {
+        await _clearPendingRecordingBestEffort();
+        _setRecordingState(
+          CaptureRecordingState.interrupted(
+            audioPath: recovery.audioPath,
+            startedAt: recovery.startedAt,
+          ),
+        );
+        return CaptureRecordingRecoveryOutcome.unavailable;
+      }
+
+      final existingDraft = await _getCaptureDraftByAudioPath(
+        recovery.audioPath,
+      );
+
+      if (existingDraft == null) {
+        await _saveDraft(recovery.audioPath, createdAt: recovery.startedAt);
+      }
+
+      await _clearPendingRecordingBestEffort();
+      _setRecordingState(const CaptureRecordingState.idle());
+      return CaptureRecordingRecoveryOutcome.recovered;
+    } catch (_) {
+      _setRecordingState(const CaptureRecordingState.interrupted());
+      rethrow;
+    }
+  }
+
   Future<void> _saveExternallyStoppedRecording(String audioPath) async {
     final recording = currentRecordingState;
     final startedAt = recording.startedAt;
@@ -128,7 +190,8 @@ class CaptureRepository {
     );
 
     try {
-      await _saveDraft(audioPath);
+      await _saveDraft(audioPath, createdAt: startedAt);
+      await _clearPendingRecordingBestEffort();
       _setRecordingState(const CaptureRecordingState.idle());
     } catch (_) {
       _setRecordingState(
@@ -191,7 +254,11 @@ class CaptureRepository {
     }
 
     try {
-      final draftId = await _saveDraft(stoppedAudioPath);
+      final draftId = await _saveDraft(
+        stoppedAudioPath,
+        createdAt: startedAt,
+      );
+      await _clearPendingRecordingBestEffort();
       _setRecordingState(const CaptureRecordingState.idle());
       return draftId;
     } catch (_) {
@@ -292,12 +359,24 @@ class CaptureRepository {
     }
   }
 
-  Future<int> _saveDraft(String audioPath) {
+  Future<int> _saveDraft(String audioPath, {DateTime? createdAt}) {
     final now = DateTime.now();
 
     return _insertCaptureDraft(
-      CaptureDraft(audioPath: audioPath, createdAt: now, updatedAt: now),
+      CaptureDraft(
+        audioPath: audioPath,
+        createdAt: createdAt ?? now,
+        updatedAt: now,
+      ),
     );
+  }
+
+  Future<void> _clearPendingRecordingBestEffort() async {
+    try {
+      await _audioRecorderService.clearPendingRecording();
+    } catch (error) {
+      debugPrint('清理待恢复录音标记失败：$error');
+    }
   }
 
   void _setRecordingState(CaptureRecordingState state) {

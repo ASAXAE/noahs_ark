@@ -37,6 +37,7 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
         event: foregroundRecordingFailedEvent,
         error: 'Missing foreground recording audio path.',
       );
+      await FlutterForegroundTask.stopService();
       return;
     }
 
@@ -63,6 +64,7 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
         audioPath: audioPath,
         error: error.toString(),
       );
+      await FlutterForegroundTask.stopService();
     }
   }
 

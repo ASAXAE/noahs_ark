@@ -65,9 +65,47 @@ class _HomePageState extends State<HomePage> {
       runTranscription: _runQueuedTranscription,
       onQueueDrained: _showTranscriptionQueueCompletedDialog,
     );
+    unawaited(_recoverPendingRecording());
     unawaited(_recoverInterruptedTranscriptions());
     _loadThoughts();
     _restoreAuthSession();
+  }
+
+  Future<void> _recoverPendingRecording() async {
+    try {
+      final outcome = await _captureRepository.recoverPendingRecording();
+
+      if (!mounted || outcome == CaptureRecordingRecoveryOutcome.none) {
+        return;
+      }
+
+      if (outcome == CaptureRecordingRecoveryOutcome.recovered) {
+        setState(() {
+          _captureInboxRefreshVersion++;
+        });
+      }
+
+      final message = switch (outcome) {
+        CaptureRecordingRecoveryOutcome.active => '已重新连接正在进行的录音',
+        CaptureRecordingRecoveryOutcome.recovered => '上次录音被中断，已恢复可用部分',
+        CaptureRecordingRecoveryOutcome.unavailable => '上次录音意外中断，未找到可恢复音频',
+        CaptureRecordingRecoveryOutcome.none => null,
+      };
+
+      if (message == null) {
+        return;
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      });
+    } catch (error) {
+      debugPrint('恢复上次录音失败：$error');
+    }
   }
 
   void _handleRecordingStateChanged() {
@@ -340,7 +378,14 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         );
+        return;
       }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('录音已开始；请勿同时使用其他录音应用，否则本段可能暂时无声'),
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
 

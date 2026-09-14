@@ -4,6 +4,20 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+enum CaptureRecordingRecoveryKind { active, recovered, unavailable }
+
+class CaptureRecordingRecovery {
+  const CaptureRecordingRecovery({
+    required this.kind,
+    required this.audioPath,
+    required this.startedAt,
+  });
+
+  final CaptureRecordingRecoveryKind kind;
+  final String audioPath;
+  final DateTime startedAt;
+}
+
 abstract interface class CaptureAudioRecorder {
   Stream<String> get externallyStoppedRecordingPaths;
 
@@ -12,6 +26,10 @@ abstract interface class CaptureAudioRecorder {
   Future<String> startRecordingAfterPermissionGranted();
 
   Future<String?> stopRecording();
+
+  Future<CaptureRecordingRecovery?> recoverPendingRecording();
+
+  Future<void> clearPendingRecording();
 
   Future<void> dispose();
 }
@@ -68,6 +86,12 @@ class AudioRecorderService implements CaptureAudioRecorder {
   Future<String?> stopRecording() {
     return _recorder.stop();
   }
+
+  @override
+  Future<CaptureRecordingRecovery?> recoverPendingRecording() async => null;
+
+  @override
+  Future<void> clearPendingRecording() async {}
 
   Future<bool> deleteRecording(String filePath) async {
     final documentsDirectory = await getApplicationDocumentsDirectory();

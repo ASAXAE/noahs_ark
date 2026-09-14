@@ -100,6 +100,22 @@ class ArkDatabase {
     return CaptureDraft.fromMap(rows.first);
   }
 
+  Future<CaptureDraft?> getCaptureDraftByAudioPath(String audioPath) async {
+    final db = await database;
+    final rows = await db.query(
+      'capture_drafts',
+      where: 'audio_path = ?',
+      whereArgs: [audioPath],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    return CaptureDraft.fromMap(rows.first);
+  }
+
   Future<List<CaptureDraft>> getCaptureDrafts() async {
     final db = await database;
 

@@ -621,10 +621,16 @@ discarded.
   playable draft and notification cleanup. A Profile build also started its
   first recording in under one second; the earlier cold-start delay was limited
   to Debug mode
-- [ ] Day 59: verify background recording on physical Android devices, covering
-  lock screen, long recordings, microphone contention, permission changes and
-  process termination. Recover usable saved audio where possible and surface
-  interruptions honestly; never imply that force-stopped recording continues
+- [x] Day 59: completed the bounded Android recording hardening pass. The OPPO
+  A52 checks covered background/lock recording, microphone contention,
+  permission changes, recent-task removal and force-stop recovery. Removing the
+  app from recent tasks now intentionally stops and saves exactly one playable
+  draft. A force-stopped zero-header WAV is recovered on the next launch without
+  overwriting its original or duplicating its draft; unusable remnants are
+  reported honestly. Foreground-service startup failures stop their notification,
+  and recording start now warns that a competing recorder can temporarily
+  produce silence. The two focused suites passed all 19 tests, and the Profile
+  build installed and launched successfully on the physical device
 - [ ] Day 60: move the recording entry from the Ark home page into the Flash
   Thought destination. Add an in-app recording panel with elapsed time, real
   audio-level feedback and Stop and Save. Preserve an active recording when
