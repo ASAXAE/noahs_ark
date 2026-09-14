@@ -382,9 +382,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('录音已开始；请勿同时使用其他录音应用，否则本段可能暂时无声'),
-        ),
+        const SnackBar(content: Text('录音已开始；请勿同时使用其他录音应用，否则本段可能暂时无声')),
       );
     } catch (error) {
       if (!mounted) return;

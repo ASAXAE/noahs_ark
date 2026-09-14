@@ -254,10 +254,7 @@ class CaptureRepository {
     }
 
     try {
-      final draftId = await _saveDraft(
-        stoppedAudioPath,
-        createdAt: startedAt,
-      );
+      final draftId = await _saveDraft(stoppedAudioPath, createdAt: startedAt);
       await _clearPendingRecordingBestEffort();
       _setRecordingState(const CaptureRecordingState.idle());
       return draftId;
