@@ -12,13 +12,19 @@ const foregroundRecordingStartedEvent = 'started';
 const foregroundRecordingStoppedEvent = 'stopped';
 const foregroundRecordingFailedEvent = 'failed';
 
+const foregroundRecordingAudioLevelEvent = 'audio_level';
+const foregroundRecordingAudioLevelDbfsKey = 'audioLevelDbfs';
+
 @pragma('vm:entry-point')
 void startForegroundRecordingCallback() {
   FlutterForegroundTask.setTaskHandler(ForegroundRecordingTaskHandler());
 }
 
 class ForegroundRecordingTaskHandler extends TaskHandler {
+  static const Duration _audioLevelInterval = Duration(milliseconds: 100);
+
   final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Amplitude>? _audioLevelSubscription;
 
   bool _isRecording = false;
   bool _isStopping = false;
@@ -56,9 +62,12 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
 
       _startedAt = DateTime.now();
 
+      _startAudioLevelReporting();
+
       _sendEvent(event: foregroundRecordingStartedEvent, audioPath: audioPath);
       _updateRecordingNotification(_startedAt!);
     } catch (error) {
+      await _cancelAudioLevelReporting();
       _sendEvent(
         event: foregroundRecordingFailedEvent,
         audioPath: audioPath,
@@ -131,8 +140,12 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
-    await _stopAndReport();
-    await _recorder.dispose();
+    try {
+      await _stopAndReport();
+    } finally {
+      await _cancelAudioLevelReporting();
+      await _recorder.dispose();
+    }
   }
 
   Future<void> _stopAndReport() {
@@ -145,6 +158,7 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
 
   Future<void> _performStopAndReport() async {
     _isStopping = true;
+    await _cancelAudioLevelReporting();
 
     unawaited(
       FlutterForegroundTask.updateService(
@@ -173,12 +187,64 @@ class ForegroundRecordingTaskHandler extends TaskHandler {
     }
   }
 
-  void _sendEvent({required String event, String? audioPath, String? error}) {
+  void _startAudioLevelReporting() {
+    if (_audioLevelSubscription != null) {
+      return;
+    }
+
+    try {
+      _audioLevelSubscription = _recorder
+          .onAmplitudeChanged(_audioLevelInterval)
+          .listen(
+            (amplitude) {
+              final audioLevelDbfs = amplitude.current;
+
+              if (!_isRecording || _isStopping || !audioLevelDbfs.isFinite) {
+                return;
+              }
+
+              _sendEvent(
+                event: foregroundRecordingAudioLevelEvent,
+                audioPath: _audioPath,
+                audioLevelDbfs: audioLevelDbfs,
+              );
+            },
+            onError: (Object _) {
+              // 音量反馈失败不能中断录音。
+            },
+          );
+    } catch (_) {
+      // 不支持音量反馈时，录音仍然继续。
+    }
+  }
+
+  Future<void> _cancelAudioLevelReporting() async {
+    final subscription = _audioLevelSubscription;
+    _audioLevelSubscription = null;
+
+    if (subscription == null) {
+      return;
+    }
+
+    try {
+      await subscription.cancel();
+    } catch (_) {
+      // 不覆盖真正的录音停止结果。
+    }
+  }
+
+  void _sendEvent({
+    required String event,
+    String? audioPath,
+    String? error,
+    double? audioLevelDbfs,
+  }) {
     FlutterForegroundTask.sendDataToMain({
       'type': foregroundRecordingMessageType,
       'event': event,
       'audioPath': ?audioPath,
       'error': ?error,
+      foregroundRecordingAudioLevelDbfsKey: ?audioLevelDbfs,
     });
   }
 }

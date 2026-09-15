@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../models/capture_recording_state.dart';
 import '../../repositories/capture_repository.dart';
 import '../../database/ark_database.dart';
 import '../../models/thought.dart';
@@ -48,20 +47,11 @@ class _HomePageState extends State<HomePage> {
   int _captureInboxRefreshVersion = 0;
   bool _queueCompletedDialogVisible = false;
 
-  CaptureRecordingPhase _previousRecordingPhase = CaptureRecordingPhase.idle;
-
-  CaptureRecordingState get _recordingState =>
-      _captureRepository.currentRecordingState;
-
-  bool get _isRecording => _recordingState.isRecording;
-
-  bool get _recordingActionInProgress => _recordingState.isActionInProgress;
-
   @override
   void initState() {
     super.initState();
-    _captureRepository.recordingState.addListener(_handleRecordingStateChanged);
     _captureViewModel = CaptureViewModel(
+      repository: _captureRepository,
       runTranscription: _runQueuedTranscription,
       onQueueDrained: _showTranscriptionQueueCompletedDialog,
     );
@@ -106,25 +96,6 @@ class _HomePageState extends State<HomePage> {
     } catch (error) {
       debugPrint('恢复上次录音失败：$error');
     }
-  }
-
-  void _handleRecordingStateChanged() {
-    final currentPhase = _recordingState.phase;
-    final recordingSaved =
-        _previousRecordingPhase == CaptureRecordingPhase.stopping &&
-        currentPhase == CaptureRecordingPhase.idle;
-
-    _previousRecordingPhase = currentPhase;
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      if (recordingSaved) {
-        _captureInboxRefreshVersion++;
-      }
-    });
   }
 
   Future<void> _recoverInterruptedTranscriptions() async {
@@ -338,61 +309,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<bool> _stopRecordingAndSave() async {
-    final draftId = await _captureRepository.stopAndSaveRecording();
-    return draftId != null;
-  }
-
-  Future<void> _toggleRecording() async {
-    if (_recordingActionInProgress) {
-      return;
-    }
-
-    try {
-      if (_isRecording) {
-        final saved = await _stopRecordingAndSave();
-
-        if (!mounted) return;
-
-        if (!saved) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('录音已停止，但未获取到可保存的音频')));
-        }
-
-        return;
-      }
-
-      final started = await _captureRepository.startRecording();
-
-      if (!mounted) return;
-
-      if (!started) {
-        final permissionDenied =
-            _recordingState.failure == CaptureRecordingFailure.permissionDenied;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              permissionDenied ? '需要麦克风和通知权限才能在后台录制闪念' : '录音未能开始，请重试',
-            ),
-          ),
-        );
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('录音已开始；请勿同时使用其他录音应用，否则本段可能暂时无声')),
-      );
-    } catch (error) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('录音操作失败，请重试')));
-    }
-  }
-
   Future<void> _restoreAuthSession() async {
     try {
       final accessToken = await AuthSessionStorage.instance.readAccessToken();
@@ -580,24 +496,6 @@ class _HomePageState extends State<HomePage> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: [
-          IconButton(
-            tooltip: _isRecording ? '停止录音' : '录制闪念',
-            onPressed: _recordingActionInProgress ? null : _toggleRecording,
-            icon: _recordingActionInProgress
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(
-                    _isRecording
-                        ? Icons.stop_circle_outlined
-                        : Icons.mic_none_outlined,
-                    color: _isRecording
-                        ? Theme.of(context).colorScheme.error
-                        : null,
-                  ),
-          ),
           if (kDebugMode)
             IconButton(
               tooltip: '测试后端连接',
@@ -707,9 +605,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _captureViewModel.dispose();
-    _captureRepository.recordingState.removeListener(
-      _handleRecordingStateChanged,
-    );
     unawaited(_captureRepository.dispose());
     _searchController.dispose();
     _authSessionNotifier.dispose();

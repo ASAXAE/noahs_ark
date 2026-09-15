@@ -310,6 +310,25 @@ void main() {
       );
       expect(recorder.clearPendingCalls, 1);
     });
+
+    test('forwards audio levels from recorder', () async {
+      final recorder = _FakeCaptureAudioRecorder();
+      final repository = CaptureRepository(audioRecorderService: recorder);
+      addTearDown(repository.dispose);
+
+      final levels = <double>[];
+      final subscription = repository.audioLevelDbfs.listen(levels.add);
+      addTearDown(subscription.cancel);
+
+      recorder.emitAudioLevel(-42.5);
+      recorder.emitAudioLevel(-12);
+
+      expect(levels, [-42.5, -12]);
+      expect(
+        repository.currentRecordingState.phase,
+        CaptureRecordingPhase.idle,
+      );
+    });
   });
 }
 
@@ -329,6 +348,16 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   int startCalls = 0;
   int stopCalls = 0;
   int clearPendingCalls = 0;
+
+  final StreamController<double> _audioLevelDbfsController =
+      StreamController<double>.broadcast(sync: true);
+
+  @override
+  Stream<double> get audioLevelDbfs => _audioLevelDbfsController.stream;
+
+  void emitAudioLevel(double value) {
+    _audioLevelDbfsController.add(value);
+  }
 
   final StreamController<String> _externallyStoppedRecordingPathsController =
       StreamController<String>.broadcast(sync: true);
@@ -375,7 +404,8 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   }
 
   @override
-  Future<void> dispose() {
-    return _externallyStoppedRecordingPathsController.close();
+  Future<void> dispose() async {
+    await _externallyStoppedRecordingPathsController.close();
+    await _audioLevelDbfsController.close();
   }
 }

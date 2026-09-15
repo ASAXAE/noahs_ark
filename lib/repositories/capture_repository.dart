@@ -63,6 +63,8 @@ class CaptureRepository {
 
   bool _disposed = false;
 
+  Stream<double> get audioLevelDbfs => _audioRecorderService.audioLevelDbfs;
+
   ValueListenable<CaptureRecordingState> get recordingState => _recordingState;
 
   CaptureRecordingState get currentRecordingState => _recordingState.value;

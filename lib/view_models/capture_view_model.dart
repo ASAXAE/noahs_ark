@@ -1,4 +1,8 @@
+import 'dart:async';
 import 'dart:collection';
+
+import '../models/capture_recording_state.dart';
+import '../repositories/capture_repository.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -6,20 +10,104 @@ typedef CaptureTranscriptionRunner = Future<void> Function(int draftId);
 
 class CaptureViewModel extends ChangeNotifier {
   CaptureViewModel({
+    required CaptureRepository repository,
     required CaptureTranscriptionRunner runTranscription,
     this.onQueueDrained,
-  }) : _runTranscription = runTranscription;
+  }) : _repository = repository,
+       _runTranscription = runTranscription {
+    _repository.recordingState.addListener(_handleRecordingStateChanged);
+    _syncAudioLevelSubscription();
+  }
 
   final VoidCallback? onQueueDrained;
   final CaptureTranscriptionRunner _runTranscription;
   final List<int> _queuedDraftIds = [];
+  final CaptureRepository _repository;
 
   Future<void>? _drainFuture;
   int? _activeDraftId;
   bool _disposed = false;
+  StreamSubscription<double>? _audioLevelSubscription;
+  double _recordingAudioLevel = 0;
 
   UnmodifiableListView<int> get queuedDraftIds =>
       UnmodifiableListView(_queuedDraftIds);
+
+  CaptureRecordingState get recordingState => _repository.currentRecordingState;
+
+  bool get isRecording => recordingState.isRecording;
+
+  bool get isRecordingActionInProgress => recordingState.isActionInProgress;
+
+  double get recordingAudioLevel => _recordingAudioLevel;
+
+  Future<bool> startRecording() {
+    return _repository.startRecording();
+  }
+
+  Future<int?> stopAndSaveRecording() {
+    return _repository.stopAndSaveRecording();
+  }
+
+  void _handleRecordingStateChanged() {
+    _syncAudioLevelSubscription();
+    _notifyListeners();
+  }
+
+  void _syncAudioLevelSubscription() {
+    if (!recordingState.isRecording) {
+      _cancelAudioLevelSubscription();
+      _recordingAudioLevel = 0;
+      return;
+    }
+
+    if (_audioLevelSubscription != null) {
+      return;
+    }
+
+    try {
+      _audioLevelSubscription = _repository.audioLevelDbfs.listen(
+        _handleAudioLevelDbfs,
+        onError: (Object _) {},
+      );
+    } catch (_) {
+      // 音量显示是辅助功能，不能让它导致录音启动失败。
+    }
+  }
+
+  void _handleAudioLevelDbfs(double dbfs) {
+    if (_disposed || !recordingState.isRecording || !dbfs.isFinite) {
+      return;
+    }
+
+    final level = ((dbfs + 60.0) / 60.0).clamp(0.0, 1.0).toDouble();
+
+    if (level == _recordingAudioLevel) {
+      return;
+    }
+
+    _recordingAudioLevel = level;
+    _notifyListeners();
+  }
+
+  void _cancelAudioLevelSubscription() {
+    final subscription = _audioLevelSubscription;
+    _audioLevelSubscription = null;
+
+    if (subscription != null) {
+      unawaited(_cancelAudioLevelSubscriptionQuietly(subscription));
+    }
+  }
+
+  Future<void> _cancelAudioLevelSubscriptionQuietly(
+    StreamSubscription<double> subscription,
+  ) async {
+    try {
+      await subscription.cancel();
+    } catch (_) {
+      // 取消音量监听失败也不影响录音状态切换。
+    }
+  }
 
   int? get activeDraftId => _activeDraftId;
 
@@ -119,7 +207,10 @@ class CaptureViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    _repository.recordingState.removeListener(_handleRecordingStateChanged);
     _disposed = true;
+    _cancelAudioLevelSubscription();
+    _recordingAudioLevel = 0;
     _queuedDraftIds.clear();
     super.dispose();
   }

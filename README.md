@@ -631,12 +631,32 @@ discarded.
   and recording start now warns that a competing recorder can temporarily
   produce silence. The two focused suites passed all 19 tests, and the Profile
   build installed and launched successfully on the physical device
-- [ ] Day 60: move the recording entry from the Ark home page into the Flash
+- [x] Day 60: move the recording entry from the Ark home page into the Flash
   Thought destination. Add an in-app recording panel with elapsed time, real
   audio-level feedback and Stop and Save. Preserve an active recording when
   navigating between destinations and restore its visible state on return.
-  Complete the capture UI boundary so `CaptureInboxPage` renders ViewModel state
-  and forwards user actions, while `HomePage` no longer owns capture behavior
+  Complete the recording UI boundary so `CaptureInboxPage` renders ViewModel state
+  and forwards recording actions, while `HomePage` no longer owns recording
+  controls. Implementation (2026-09-15): the Ark-home recording control and its
+  direct recording handlers have been removed; Flash Thought is the sole in-app
+  recording entry. `CaptureInboxPage` forwards start and Stop and Save actions
+  to the shared `CaptureViewModel`, renders elapsed time and normalized dBFS
+  audio level, and refreshes its own draft list after `stopping -> idle`.
+  Foreground audio-level events now carry an audio path so late events from a
+  different recording session are ignored. `CaptureRecordingPanel` has 3
+  focused widget tests, and an `AppShell` test verifies that the Flash Thought
+  destination remains mounted across tab switches. The current Flutter suite
+  passed all 47 tests, the formatting gate reported 50 files with 0 changes,
+  and a Debug APK built successfully. `HomePage` remains the app-level
+  composition root for the shared repository, startup recovery and
+  transcription coordination, but no longer renders or sends Ark recording
+  actions. The Debug APK was installed and launched on a connected Android
+  device. The user confirmed that elapsed time advances, real audio level moves
+  with speech, and Stop and Save returns the panel to idle. A new recording
+  continued across Flash Thought, Ark home and My, retained its timer, Stop and
+  Save action and live level on return, and Ark home had no old recording button.
+  The inbox refreshed without restarting or manual refresh, added exactly one
+  draft for that recording, and playback included the spoken beginning and end.
 - [ ] Day 61: add playback progress and seeking to inbox audio, showing current
   position and total duration. Verify seeking, pause/resume, completion, switching
   clips and deletion during playback. Regress the new capture entry together

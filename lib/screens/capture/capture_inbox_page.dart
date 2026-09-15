@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'capture_recording_panel.dart';
 import '../../database/ark_database.dart';
 import '../../models/capture_draft.dart';
 import '../../services/audio_playback_service.dart';
@@ -8,6 +9,7 @@ import '../../services/audio_recorder_service.dart';
 import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
 import '../../view_models/capture_view_model.dart';
+import '../../models/capture_recording_state.dart';
 
 class CaptureInboxPage extends StatefulWidget {
   const CaptureInboxPage({
@@ -38,10 +40,25 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   List<CaptureDraft> _drafts = [];
   bool _loading = true;
   bool _loadFailed = false;
+  Timer? _recordingTicker;
+  late CaptureRecordingPhase _previousRecordingPhase;
+  bool _draftRefreshScheduled = false;
+  int _draftLoadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+
+    _previousRecordingPhase = widget.captureViewModel.recordingState.phase;
+    widget.captureViewModel.addListener(_handleCaptureViewModelChanged);
+
+    _recordingTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted ||
+          !widget.captureViewModel.recordingState.hasActiveRecording) {
+        return;
+      }
+      setState(() {});
+    });
 
     _playbackCompleteSubscription = _audioPlaybackService.onPlayerComplete
         .listen((_) {
@@ -60,17 +77,45 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   void didUpdateWidget(covariant CaptureInboxPage oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.refreshVersion != widget.refreshVersion) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _loadDrafts();
-        }
-      });
+    if (oldWidget.captureViewModel != widget.captureViewModel) {
+      oldWidget.captureViewModel.removeListener(_handleCaptureViewModelChanged);
+      _previousRecordingPhase = widget.captureViewModel.recordingState.phase;
+      widget.captureViewModel.addListener(_handleCaptureViewModelChanged);
     }
+
+    if (oldWidget.refreshVersion != widget.refreshVersion) {
+      _scheduleDraftRefresh();
+    }
+  }
+
+  void _handleCaptureViewModelChanged() {
+    final currentPhase = widget.captureViewModel.recordingState.phase;
+    final recordingSaved =
+        _previousRecordingPhase == CaptureRecordingPhase.stopping &&
+        currentPhase == CaptureRecordingPhase.idle;
+    _previousRecordingPhase = currentPhase;
+
+    if (recordingSaved && mounted) {
+      _scheduleDraftRefresh();
+    }
+  }
+
+  void _scheduleDraftRefresh() {
+    if (_draftRefreshScheduled) return;
+    _draftRefreshScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _draftRefreshScheduled = false;
+      if (mounted) {
+        unawaited(_loadDrafts());
+      }
+    });
   }
 
   @override
   void dispose() {
+    widget.captureViewModel.removeListener(_handleCaptureViewModelChanged);
+    _recordingTicker?.cancel();
     _playbackCompleteSubscription?.cancel();
     _audioPlaybackService.dispose();
     _audioRecorderService.dispose();
@@ -296,7 +341,53 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     }
   }
 
+  Future<void> _toggleRecordingFromInbox() async {
+    final viewModel = widget.captureViewModel;
+    if (viewModel.isRecordingActionInProgress) return;
+
+    try {
+      if (viewModel.isRecording) {
+        final draftId = await viewModel.stopAndSaveRecording();
+        if (!mounted) return;
+
+        if (draftId == null) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('录音已停止，但未获取到可保存的音频')));
+        }
+        return;
+      }
+
+      final started = await viewModel.startRecording();
+      if (!mounted) return;
+
+      if (!started) {
+        final permissionDenied =
+            viewModel.recordingState.failure ==
+            CaptureRecordingFailure.permissionDenied;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              permissionDenied ? '需要麦克风和通知权限才能在后台录制闪念' : '录音未能开始，请重试',
+            ),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('录音已开始；请勿同时使用其他录音应用，否则本段可能暂时无声')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('录音操作失败，请重试')));
+    }
+  }
+
   Future<void> _loadDrafts() async {
+    final loadGeneration = ++_draftLoadGeneration;
     setState(() {
       _loading = true;
       _loadFailed = false;
@@ -305,14 +396,14 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     try {
       final drafts = await ArkDatabase.instance.getCaptureDrafts();
 
-      if (!mounted) return;
+      if (!mounted || loadGeneration != _draftLoadGeneration) return;
 
       setState(() {
         _drafts = drafts;
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || loadGeneration != _draftLoadGeneration) return;
 
       setState(() {
         _loading = false;
@@ -329,10 +420,33 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
         child: ListenableBuilder(
           listenable: widget.captureViewModel,
           builder: (context, child) {
-            return _buildBody();
+            return Column(
+              children: [
+                _buildRecordingPanel(),
+                Expanded(child: _buildBody()),
+              ],
+            );
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildRecordingPanel() {
+    final viewModel = widget.captureViewModel;
+    final state = viewModel.recordingState;
+    final startedAt = state.startedAt;
+    final elapsed = startedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(startedAt);
+
+    return CaptureRecordingPanel(
+      state: state,
+      recordingAudioLevel: viewModel.recordingAudioLevel,
+      elapsed: elapsed,
+      onPressed: () {
+        unawaited(_toggleRecordingFromInbox());
+      },
     );
   }
 

@@ -56,10 +56,21 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
 
   final StreamController<String> _externallyStoppedRecordingPathsController =
       StreamController<String>.broadcast(sync: true);
+  final StreamController<double> _audioLevelDbfsController =
+      StreamController<double>.broadcast(sync: true);
   Completer<String>? _startCompleter;
   Completer<String?>? _stopCompleter;
   String? _activeAudioPath;
   bool _disposed = false;
+
+  @override
+  Stream<double> get audioLevelDbfs {
+    if (!Platform.isAndroid) {
+      return _fallbackRecorder.audioLevelDbfs;
+    }
+
+    return _audioLevelDbfsController.stream;
+  }
 
   @override
   Stream<String> get externallyStoppedRecordingPaths =>
@@ -266,6 +277,23 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
     final event = data['event'];
     final audioPath = data['audioPath'];
 
+    if (event == foregroundRecordingAudioLevelEvent) {
+      final value = data[foregroundRecordingAudioLevelDbfsKey];
+
+      if (!_disposed &&
+          audioPath is String &&
+          audioPath == _activeAudioPath &&
+          value is num) {
+        final audioLevelDbfs = value.toDouble();
+
+        if (audioLevelDbfs.isFinite) {
+          _audioLevelDbfsController.add(audioLevelDbfs);
+        }
+      }
+
+      return;
+    }
+
     if (event == foregroundRecordingStartedEvent) {
       final completer = _startCompleter;
 
@@ -376,6 +404,7 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
     }
 
     await _externallyStoppedRecordingPathsController.close();
+    await _audioLevelDbfsController.close();
     await _fallbackRecorder.dispose();
   }
 }

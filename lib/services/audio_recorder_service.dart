@@ -19,6 +19,8 @@ class CaptureRecordingRecovery {
 }
 
 abstract interface class CaptureAudioRecorder {
+  Stream<double> get audioLevelDbfs;
+
   Stream<String> get externallyStoppedRecordingPaths;
 
   Future<bool> requestPermission();
@@ -36,8 +38,16 @@ abstract interface class CaptureAudioRecorder {
 
 class AudioRecorderService implements CaptureAudioRecorder {
   static const int _voiceSampleRate = 48000;
+  static const Duration _audioLevelInterval = Duration(milliseconds: 100);
 
   final AudioRecorder _recorder = AudioRecorder();
+
+  @override
+  Stream<double> get audioLevelDbfs {
+    return _recorder
+        .onAmplitudeChanged(_audioLevelInterval)
+        .map((amplitude) => amplitude.current);
+  }
 
   @override
   Stream<String> get externallyStoppedRecordingPaths =>
