@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import '../models/capture_recording_state.dart';
 import '../repositories/capture_repository.dart';
+import '../models/capture_playback_state.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -16,6 +17,7 @@ class CaptureViewModel extends ChangeNotifier {
   }) : _repository = repository,
        _runTranscription = runTranscription {
     _repository.recordingState.addListener(_handleRecordingStateChanged);
+    _repository.playbackState.addListener(_handlePlaybackStateChanged);
     _syncAudioLevelSubscription();
   }
 
@@ -35,6 +37,8 @@ class CaptureViewModel extends ChangeNotifier {
 
   CaptureRecordingState get recordingState => _repository.currentRecordingState;
 
+  CapturePlaybackState get playbackState => _repository.currentPlaybackState;
+
   bool get isRecording => recordingState.isRecording;
 
   bool get isRecordingActionInProgress => recordingState.isActionInProgress;
@@ -49,8 +53,24 @@ class CaptureViewModel extends ChangeNotifier {
     return _repository.stopAndSaveRecording();
   }
 
+  Future<bool> togglePlayback(String audioPath) {
+    return _repository.togglePlayback(audioPath);
+  }
+
+  Future<void> seekPlayback(Duration position) {
+    return _repository.seekPlayback(position);
+  }
+
+  Future<void> stopPlayback({String? audioPath}) {
+    return _repository.stopPlayback(audioPath: audioPath);
+  }
+
   void _handleRecordingStateChanged() {
     _syncAudioLevelSubscription();
+    _notifyListeners();
+  }
+
+  void _handlePlaybackStateChanged() {
     _notifyListeners();
   }
 
@@ -208,6 +228,7 @@ class CaptureViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _repository.recordingState.removeListener(_handleRecordingStateChanged);
+    _repository.playbackState.removeListener(_handlePlaybackStateChanged);
     _disposed = true;
     _cancelAudioLevelSubscription();
     _recordingAudioLevel = 0;

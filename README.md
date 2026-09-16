@@ -624,11 +624,12 @@ discarded.
 - [x] Day 59: completed the bounded Android recording hardening pass. The OPPO
   A52 checks covered background/lock recording, microphone contention,
   permission changes, recent-task removal and force-stop recovery. Removing the
-  app from recent tasks now intentionally stops and saves exactly one playable
-  draft. A force-stopped zero-header WAV is recovered on the next launch without
-  overwriting its original or duplicating its draft; unusable remnants are
-  reported honestly. Foreground-service startup failures stop their notification,
-  and recording start now warns that a competing recorder can temporarily
+  app from recent tasks stopped and saved exactly one playable draft at that
+  checkpoint; Day 61 revised the task-removal setting to preserve lock-screen
+  recording. A force-stopped zero-header WAV is recovered on the next launch
+  without overwriting its original or duplicating its draft; unusable remnants
+  are reported honestly. Foreground-service startup failures stop their
+  notification. Recording start warns that a competing recorder may temporarily
   produce silence. The two focused suites passed all 19 tests, and the Profile
   build installed and launched successfully on the physical device
 - [x] Day 60: move the recording entry from the Ark home page into the Flash
@@ -657,12 +658,23 @@ discarded.
   Save action and live level on return, and Ark home had no old recording button.
   The inbox refreshed without restarting or manual refresh, added exactly one
   draft for that recording, and playback included the spoken beginning and end.
-- [ ] Day 61: add playback progress and seeking to inbox audio, showing current
-  position and total duration. Verify seeking, pause/resume, completion, switching
-  clips and deletion during playback. Regress the new capture entry together
-  with background recording, notification controls and confirmed conversion.
-  Keep playback state and commands outside the page, then review the completed
-  `View → ViewModel → Repository → Database/Service` boundary
+- [x] Day 61: added seekable playback progress with current position and total
+  duration to Flash Thought drafts. `CapturePlaybackState` models loading,
+  playing, paused and idle; `CaptureRepository` owns player commands, progress
+  subscriptions and completion/race handling, while `CaptureViewModel` forwards
+  state and commands to the inbox UI. The page renders the progress widget and
+  leaves player operations in `AudioPlaybackService`. Focused tests cover
+  seeking, pause/resume, completion, switching clips, deletion and in-flight
+  playback actions. All 57 Flutter tests and `git diff --check` passed. Android
+  device checks passed for playback controls and those transitions, recording
+  while backgrounded or locked, notification stop/save, recent-task removal and
+  confirmed conversion to one formal record while retaining the original audio.
+  Locking first stopped recording on the OPPO device with
+  `stopWithTask: true`. Restoring `false` passed the lock-screen and recent-task
+  regression checks. Boundary review: playback
+  follows `View → ViewModel → Repository → Service`. Draft listing, deletion and
+  confirmed conversion still call `ArkDatabase` from `CaptureInboxPage`; those
+  flows remain a separate incremental architecture follow-up
 - [ ] Day 62: add email-verification database structures with expiring,
   single-use tokens stored only as hashes
 - [ ] Day 63: add a mail-sending adapter, development fake sender, resend flow and

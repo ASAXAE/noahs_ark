@@ -44,7 +44,7 @@ class ForegroundAudioRecorderService implements CaptureAudioRecorder {
         allowWakeLock: true,
         allowWifiLock: false,
         allowAutoRestart: false,
-        stopWithTask: true,
+        stopWithTask: false,
       ),
     );
   }

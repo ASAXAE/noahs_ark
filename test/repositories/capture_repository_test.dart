@@ -5,6 +5,8 @@ import 'package:noahs_ark_app/models/capture_recording_state.dart';
 import 'package:noahs_ark_app/repositories/capture_repository.dart';
 import 'package:noahs_ark_app/services/audio_recorder_service.dart';
 import 'package:noahs_ark_app/models/capture_draft.dart';
+import 'package:noahs_ark_app/models/capture_playback_state.dart';
+import 'package:noahs_ark_app/services/audio_playback_service.dart';
 
 void main() {
   group('CaptureRepository recording state', () {
@@ -330,6 +332,200 @@ void main() {
       );
     });
   });
+
+  group('CaptureRepository playback', () {
+    late _FakeCaptureAudioPlayback playback;
+    late CaptureRepository repository;
+
+    setUp(() {
+      playback = _FakeCaptureAudioPlayback();
+      repository = CaptureRepository(
+        audioRecorderService: _FakeCaptureAudioRecorder(),
+        audioPlaybackService: playback,
+      );
+      addTearDown(repository.dispose);
+    });
+
+    test('stop waits for an in-flight play before returning', () async {
+      const path = '/capture/a.wav';
+      playback.playEntered = Completer<void>();
+      playback.playGate = Completer<bool>();
+
+      final toggleFuture = repository.togglePlayback(path);
+      await playback.playEntered!.future;
+
+      final stopFuture = repository.stopPlayback(audioPath: path);
+      playback.playGate!.complete(true);
+
+      expect(await toggleFuture, isFalse);
+      await stopFuture;
+
+      expect(repository.currentPlaybackState.phase, CapturePlaybackPhase.idle);
+      expect(playback.commands.last, 'stop');
+    });
+
+    test('switching clips waits for an in-flight seek', () async {
+      const first = '/capture/a.wav';
+      const second = '/capture/b.wav';
+
+      expect(await repository.togglePlayback(first), isTrue);
+      playback.emitDuration(const Duration(seconds: 90));
+      playback.seekEntered = Completer<void>();
+      playback.seekGate = Completer<void>();
+
+      final seekFuture = repository.seekPlayback(const Duration(seconds: 40));
+      await playback.seekEntered!.future;
+
+      final switchFuture = repository.togglePlayback(second);
+      try {
+        expect(playback.playedPaths, [first]);
+        expect(playback.commands.last, 'seek-start');
+      } finally {
+        playback.seekGate!.complete();
+      }
+
+      await seekFuture;
+      expect(await switchFuture, isTrue);
+      expect(playback.playedPaths, [first, second]);
+      expect(
+        playback.commands.indexOf('seek-end'),
+        lessThan(playback.commands.lastIndexOf('stop')),
+      );
+      expect(
+        playback.commands.lastIndexOf('stop'),
+        lessThan(playback.commands.lastIndexOf('play-start')),
+      );
+      expect(repository.currentPlaybackState.audioPath, second);
+      expect(repository.currentPlaybackState.position, Duration.zero);
+    });
+
+    test('stop waits for an in-flight seek before returning', () async {
+      const path = '/capture/a.wav';
+
+      expect(await repository.togglePlayback(path), isTrue);
+      playback.emitDuration(const Duration(seconds: 90));
+      playback.seekEntered = Completer<void>();
+      playback.seekGate = Completer<void>();
+
+      final seekFuture = repository.seekPlayback(const Duration(seconds: 40));
+      await playback.seekEntered!.future;
+
+      final stopFuture = repository.stopPlayback(audioPath: path);
+      try {
+        expect(
+          repository.currentPlaybackState.phase,
+          CapturePlaybackPhase.idle,
+        );
+        expect(playback.commands.last, 'seek-start');
+      } finally {
+        playback.seekGate!.complete();
+      }
+
+      await seekFuture;
+      await stopFuture;
+      expect(playback.commands.last, 'stop');
+      expect(repository.currentPlaybackState.phase, CapturePlaybackPhase.idle);
+      expect(repository.currentPlaybackState.audioPath, isNull);
+    });
+
+    test('pause and resume retain position; seeking stays in bounds', () async {
+      const path = '/capture/a.wav';
+
+      expect(await repository.togglePlayback(path), isTrue);
+      playback.emitDuration(const Duration(seconds: 120));
+      playback.emitPosition(const Duration(seconds: 30));
+
+      expect(repository.currentPlaybackState.isPlaying, isTrue);
+      expect(
+        repository.currentPlaybackState.position,
+        const Duration(seconds: 30),
+      );
+
+      await repository.togglePlayback(path);
+      expect(repository.currentPlaybackState.isPaused, isTrue);
+      expect(
+        repository.currentPlaybackState.position,
+        const Duration(seconds: 30),
+      );
+      expect(playback.pauseCalls, 1);
+
+      await repository.togglePlayback(path);
+      expect(repository.currentPlaybackState.isPlaying, isTrue);
+      expect(playback.resumeCalls, 1);
+
+      await repository.seekPlayback(const Duration(seconds: 200));
+      expect(playback.seekTargets.last, const Duration(seconds: 120));
+
+      await repository.seekPlayback(const Duration(seconds: -5));
+      expect(playback.seekTargets.last, Duration.zero);
+    });
+
+    test(
+      'switching clips resets progress and stops only the matching path',
+      () async {
+        const first = '/capture/a.wav';
+        const second = '/capture/b.wav';
+
+        await repository.togglePlayback(first);
+        playback.emitDuration(const Duration(seconds: 90));
+        playback.emitPosition(const Duration(seconds: 40));
+
+        await repository.togglePlayback(second);
+
+        expect(playback.playedPaths, [first, second]);
+        expect(repository.currentPlaybackState.audioPath, second);
+        expect(repository.currentPlaybackState.position, Duration.zero);
+        expect(repository.currentPlaybackState.duration, Duration.zero);
+
+        final stopCalls = playback.stopCalls;
+        await repository.stopPlayback(audioPath: first);
+        expect(playback.stopCalls, stopCalls);
+        expect(repository.currentPlaybackState.audioPath, second);
+
+        await repository.stopPlayback(audioPath: second);
+        expect(playback.stopCalls, stopCalls + 1);
+        expect(
+          repository.currentPlaybackState.phase,
+          CapturePlaybackPhase.idle,
+        );
+      },
+    );
+
+    test('completion during loading does not leave playback active', () async {
+      const path = '/capture/short.wav';
+      playback.playEntered = Completer<void>();
+      playback.playGate = Completer<bool>();
+
+      final toggleFuture = repository.togglePlayback(path);
+      await playback.playEntered!.future;
+
+      try {
+        expect(
+          repository.currentPlaybackState.phase,
+          CapturePlaybackPhase.loading,
+        );
+        playback.emitComplete();
+      } finally {
+        playback.playGate!.complete(true);
+      }
+
+      await toggleFuture;
+      expect(repository.currentPlaybackState.phase, CapturePlaybackPhase.idle);
+    });
+
+    test('completion clears the active playback state', () async {
+      await repository.togglePlayback('/capture/a.wav');
+      playback.emitDuration(const Duration(seconds: 10));
+      playback.emitPosition(const Duration(seconds: 9));
+
+      playback.emitComplete();
+
+      expect(repository.currentPlaybackState.phase, CapturePlaybackPhase.idle);
+      expect(repository.currentPlaybackState.audioPath, isNull);
+      expect(repository.currentPlaybackState.position, Duration.zero);
+      expect(repository.currentPlaybackState.duration, Duration.zero);
+    });
+  });
 }
 
 class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
@@ -407,5 +603,91 @@ class _FakeCaptureAudioRecorder implements CaptureAudioRecorder {
   Future<void> dispose() async {
     await _externallyStoppedRecordingPathsController.close();
     await _audioLevelDbfsController.close();
+  }
+}
+
+class _FakeCaptureAudioPlayback implements CaptureAudioPlayback {
+  final _positions = StreamController<Duration>.broadcast(sync: true);
+  final _durations = StreamController<Duration>.broadcast(sync: true);
+  final _completions = StreamController<void>.broadcast(sync: true);
+
+  final List<String> playedPaths = [];
+  final List<Duration> seekTargets = [];
+  int pauseCalls = 0;
+  int resumeCalls = 0;
+  int stopCalls = 0;
+
+  Completer<void>? playEntered;
+  Completer<bool>? playGate;
+  Completer<void>? seekEntered;
+  Completer<void>? seekGate;
+  final List<String> commands = [];
+
+  void emitPosition(Duration position) => _positions.add(position);
+
+  void emitDuration(Duration duration) => _durations.add(duration);
+
+  void emitComplete() => _completions.add(null);
+
+  @override
+  Stream<Duration> get onPositionChanged => _positions.stream;
+
+  @override
+  Stream<Duration> get onDurationChanged => _durations.stream;
+
+  @override
+  Stream<void> get onPlayerComplete => _completions.stream;
+
+  @override
+  Future<bool> play(String filePath) async {
+    playedPaths.add(filePath);
+    commands.add('play-start');
+    playEntered?.complete();
+
+    final gate = playGate;
+    final result = gate == null ? true : await gate.future;
+
+    commands.add('play-end');
+    return result;
+  }
+
+  @override
+  Future<void> pause() async {
+    pauseCalls++;
+  }
+
+  @override
+  Future<void> resume() async {
+    resumeCalls++;
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    seekTargets.add(position);
+    commands.add('seek-start');
+    final entered = seekEntered;
+    if (entered != null && !entered.isCompleted) {
+      entered.complete();
+    }
+
+    final gate = seekGate;
+    if (gate != null) {
+      await gate.future;
+    }
+
+    commands.add('seek-end');
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCalls++;
+    commands.add('stop');
+  }
+
+  @override
+  Future<void> dispose() async {
+    await _positions.close();
+    await _durations.close();
+    await _completions.close();
   }
 }

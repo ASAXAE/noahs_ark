@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'capture_playback_progress.dart';
 import 'capture_recording_panel.dart';
 import '../../database/ark_database.dart';
 import '../../models/capture_draft.dart';
-import '../../services/audio_playback_service.dart';
 import '../../services/audio_recorder_service.dart';
 import '../thinking/thinking_page.dart';
 import '../detail/thought_detail_page.dart';
@@ -30,12 +30,8 @@ class CaptureInboxPage extends StatefulWidget {
 }
 
 class _CaptureInboxPageState extends State<CaptureInboxPage> {
-  final _audioPlaybackService = AudioPlaybackService();
   final _audioRecorderService = AudioRecorderService();
 
-  StreamSubscription<void>? _playbackCompleteSubscription;
-  String? _activeAudioPath;
-  bool _playbackPaused = false;
   String? _deletingAudioPath;
   List<CaptureDraft> _drafts = [];
   bool _loading = true;
@@ -59,16 +55,6 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
       }
       setState(() {});
     });
-
-    _playbackCompleteSubscription = _audioPlaybackService.onPlayerComplete
-        .listen((_) {
-          if (!mounted) return;
-
-          setState(() {
-            _activeAudioPath = null;
-            _playbackPaused = false;
-          });
-        });
 
     _loadDrafts();
   }
@@ -116,42 +102,13 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
   void dispose() {
     widget.captureViewModel.removeListener(_handleCaptureViewModelChanged);
     _recordingTicker?.cancel();
-    _playbackCompleteSubscription?.cancel();
-    _audioPlaybackService.dispose();
     _audioRecorderService.dispose();
     super.dispose();
   }
 
   Future<void> _playDraft(CaptureDraft draft) async {
-    final audioPath = draft.audioPath;
-
     try {
-      if (_activeAudioPath == audioPath) {
-        if (_playbackPaused) {
-          await _audioPlaybackService.resume();
-
-          if (!mounted || _activeAudioPath != audioPath) return;
-
-          setState(() => _playbackPaused = false);
-        } else {
-          await _audioPlaybackService.pause();
-
-          if (!mounted || _activeAudioPath != audioPath) return;
-
-          setState(() => _playbackPaused = true);
-        }
-
-        return;
-      }
-
-      final started = await _audioPlaybackService.play(audioPath);
-
-      if (!mounted || !started) return;
-
-      setState(() {
-        _activeAudioPath = audioPath;
-        _playbackPaused = false;
-      });
+      await widget.captureViewModel.togglePlayback(draft.audioPath);
     } catch (error) {
       debugPrint('播放原始录音失败：$error');
     }
@@ -302,7 +259,7 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     setState(() => _deletingAudioPath = draft.audioPath);
 
     try {
-      await _audioPlaybackService.stop();
+      await widget.captureViewModel.stopPlayback(audioPath: draft.audioPath);
 
       final audioDeleted = await _audioRecorderService.deleteRecording(
         draft.audioPath,
@@ -500,6 +457,14 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
     final queuePosition = draftId == null
         ? null
         : widget.captureViewModel.queuePositionFor(draftId);
+    final playbackState = widget.captureViewModel.playbackState;
+    final isThisDraftPlaying =
+        playbackState.audioPath == draft.audioPath && playbackState.isPlaying;
+    final isThisDraftLoading =
+        playbackState.audioPath == draft.audioPath && playbackState.isLoading;
+    final isThisDraftPlayback =
+        playbackState.audioPath == draft.audioPath &&
+        playbackState.hasActivePlayback;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -611,6 +576,16 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
                 queuePosition: queuePosition,
               ),
             ),
+            if (isThisDraftPlayback) ...[
+              const SizedBox(height: 8),
+              CapturePlaybackProgress(
+                key: ValueKey(draft.audioPath),
+                position: playbackState.position,
+                duration: playbackState.duration,
+                isLoading: playbackState.isLoading,
+                onSeek: widget.captureViewModel.seekPlayback,
+              ),
+            ],
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
@@ -618,21 +593,33 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
               children: [
                 const SizedBox(width: 5),
                 FilledButton.tonalIcon(
-                  onPressed: () => _playDraft(draft),
+                  onPressed: playbackState.isLoading
+                      ? null
+                      : () {
+                          unawaited(_playDraft(draft));
+                        },
                   style: FilledButton.styleFrom(
                     minimumSize: const Size(0, 42),
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
-                  icon: Icon(
-                    _activeAudioPath == draft.audioPath && !_playbackPaused
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                    size: 20,
-                  ),
+                  icon: isThisDraftLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          isThisDraftPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          size: 20,
+                        ),
                   label: Text(
-                    _activeAudioPath == draft.audioPath && !_playbackPaused
-                        ? '暂停   '
-                        : '播放   ',
+                    isThisDraftLoading
+                        ? '载入中'
+                        : isThisDraftPlaying
+                        ? '暂停'
+                        : '播放',
                   ),
                 ),
                 const SizedBox(width: 30),
