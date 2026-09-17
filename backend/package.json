@@ -6,7 +6,7 @@
   "scripts": {
     "db:migrate": "node src/migrate.js",
     "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js",
-    "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js"
+    "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js integration/email_verification.integration.test.js"
   },
   "keywords": [],
   "author": "",

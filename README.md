@@ -489,7 +489,9 @@ discarded.
 
 - Registration, login, JWT verification, current-user lookup and per-user
   Thought authorization are implemented for local learning and testing.
-- Account deletion, refresh tokens and email verification are not implemented.
+- Account deletion and refresh tokens are not implemented. Email verification
+  has backend storage and token issue/consume logic, but no HTTP flow, email
+  delivery, resend limits or Flutter UI yet.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -675,8 +677,14 @@ discarded.
   follows `View → ViewModel → Repository → Service`. Draft listing, deletion and
   confirmed conversion still call `ArkDatabase` from `CaptureInboxPage`; those
   flows remain a separate incremental architecture follow-up
-- [ ] Day 62: add email-verification database structures with expiring,
-  single-use tokens stored only as hashes
+- [x] Day 62: added `004_add_email_verification.sql` with
+  `users.email_verified_at` and email-verification tokens stored only as
+  SHA-256 hashes. The backend issues 32-byte random tokens with a 24-hour
+  expiry and consumes each token once in a transaction before marking the user
+  verified. The migration applied to local PostgreSQL; all 22 backend unit
+  tests and 10 integration tests passed, including hash storage, expiry,
+  replay and concurrent consumption. Email delivery, resend, HTTP endpoints
+  and Flutter status remain later tasks.
 - [ ] Day 63: add a mail-sending adapter, development fake sender, resend flow and
   rate limits. External services require explicit approval
 - [ ] Day 64: show email-verification state, resend and results in Flutter without
