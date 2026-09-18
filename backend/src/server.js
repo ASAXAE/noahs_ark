@@ -22,9 +22,24 @@ const {
     validateLoginInput,
 } = require('./auth_validation');
 
+const {
+    createFakeVerificationMailer,
+} = require('./verification_mailer');
+const {
+    requestVerificationEmail,
+} = require('./verification_delivery');
+const {
+    consumeEmailVerificationToken,
+} = require('./email_verification');
+
 const app = express();
 
 const port = process.env.PORT || 3000;
+
+const verificationMailer =
+    process.env.EMAIL_DELIVERY_MODE === 'fake'
+        ? createFakeVerificationMailer()
+        : null;
 
 app.use(express.json());
 
@@ -75,7 +90,21 @@ app.post('/auth/register', async (request, response) => {
             ],
         );
 
-        return response.status(201).json(result.rows[0]);
+        const user = result.rows[0];
+
+        if (verificationMailer !== null) {
+            try {
+                await requestVerificationEmail(
+                    pool,
+                    user.id,
+                    verificationMailer,
+                );
+            } catch {
+                console.error('Failed to request initial verification email');
+            }
+        }
+
+        return response.status(201).json(user);
     } catch (error) {
         if (error.code === '23505') {
             return response.status(409).json({
@@ -199,6 +228,70 @@ app.get(
             return response.status(500).json({
                 message:
                     'Failed to fetch authenticated user',
+            });
+        }
+    },
+);
+
+app.post(
+    '/auth/email-verification/resend',
+    requireAuthentication,
+    async (request, response) => {
+        if (verificationMailer === null) {
+            return response.status(503).json({
+                message: 'Email delivery is not configured',
+            });
+        }
+
+        try {
+            const result = await requestVerificationEmail(
+                pool,
+                request.auth.userId,
+                verificationMailer,
+            );
+
+            if (result.status === 'rate_limited') {
+                return response.status(429).json({
+                    message: 'Please wait before requesting another verification email',
+                });
+            }
+
+            return response.status(202).json({
+                message: 'Verification request accepted',
+            });
+        } catch {
+            console.error('Failed to request verification email');
+            return response.status(503).json({
+                message: 'Verification email is temporarily unavailable',
+            });
+        }
+    },
+);
+
+app.post(
+    '/auth/email-verification/confirm',
+    async (request, response) => {
+        const token = request.body?.token;
+
+        try {
+            const verified = await consumeEmailVerificationToken(
+                pool,
+                token,
+            );
+
+            if (!verified) {
+                return response.status(400).json({
+                    message: 'Invalid or expired verification token',
+                });
+            }
+
+            return response.status(200).json({
+                verified: true,
+            });
+        } catch {
+            console.error('Failed to confirm email verification');
+            return response.status(500).json({
+                message: 'Failed to confirm email verification',
             });
         }
     },

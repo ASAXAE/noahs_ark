@@ -68,6 +68,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - PostgreSQL Thought queries are scoped to the authenticated user, with
   two-account isolation coverage
 - Duplicate-email protection, credential verification and authentication tests
+- Email-verification token hashes, authenticated resend, single-use confirmation,
+  per-account send limits and an explicitly configured in-memory fake sender
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
 
@@ -161,20 +163,29 @@ test/
 backend/
 ├── integration/
 │   ├── auth_api.integration.test.js
+│   ├── email_verification.integration.test.js
 │   └── thought_api.integration.test.js
 ├── sql/
 │   ├── 001_create_users.sql
 │   ├── 002_create_thoughts.sql
-│   └── 003_add_password_hash.sql
+│   ├── 003_add_password_hash.sql
+│   └── 004_add_email_verification.sql
 ├── src/
 │   ├── auth_middleware.js
 │   ├── auth_token.js
 │   ├── auth_validation.js
 │   ├── database.js
+│   ├── email_verification.js
+│   ├── migrate.js
+│   ├── migration_runner.js
 │   ├── server.js
-│   └── thought_validation.js
+│   ├── thought_validation.js
+│   ├── verification_delivery.js
+│   ├── verification_mailer.js
+│   └── verification_request.js
 └── test/
     ├── auth_validation.test.js
+    ├── migration_runner.test.js
     └── thought_validation.test.js
 
 scripts/
@@ -190,9 +201,11 @@ assets/
 |---|---|---|
 | `GET` | `/health` | Check whether Express is running |
 | `GET` | `/database-health` | Check the PostgreSQL connection |
-| `POST` | `/auth/register` | Validate and register a backend test user |
+| `POST` | `/auth/register` | Register a backend test user; request initial verification when fake delivery is enabled |
 | `POST` | `/auth/login` | Verify credentials and issue a JWT access token |
 | `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
+| `POST` | `/auth/email-verification/resend` | Request verification for the authenticated account; rate-limited requests return 429 |
+| `POST` | `/auth/email-verification/confirm` | Consume a verification token from the JSON body; invalid, expired or used tokens return 400 |
 | `GET` | `/thoughts` | Fetch the authenticated user's server records |
 | `POST` | `/thoughts` | Create a record for the authenticated user |
 | `PATCH` | `/thoughts/:id` | Update a record owned by the authenticated user |
@@ -290,9 +303,16 @@ DB_USER=postgres
 DB_PASSWORD=your_postgresql_password
 JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=1h
+EMAIL_DELIVERY_MODE=disabled
 ```
 
 Secrets in `backend/.env` are ignored by Git.
+Email delivery is disabled by default. For local tests, set
+`EMAIL_DELIVERY_MODE=fake` in that ignored file. The fake sender keeps raw
+tokens in server memory for tests and sends no real email; it has no HTTP
+outbox. Registration still succeeds when delivery is disabled, while the
+authenticated resend endpoint returns 503. Resend accepts a bearer token;
+confirmation accepts JSON such as `{"token":"<64-character token>"}`.
 
 ### 3. Run PostgreSQL migrations
 
@@ -415,8 +435,10 @@ issuance, authenticated `/auth/me` access and rejection of missing or invalid
 tokens. They also prove that one authenticated user cannot read, update or
 delete another user's thoughts. Input rejection, password hashing,
 duplicate-email protection and generic rejection of invalid credentials are
-covered as well. Temporary records and users created by the tests are removed
-afterward.
+covered as well. Email-verification tests cover token hashing, expiry,
+single-use consumption, concurrent requests, one-per-minute and five-per-day
+limits, fake delivery and failed-send cleanup. Temporary records and users
+created by the tests are removed afterward.
 
 Latest Day 41 client verification: `flutter analyze` and `flutter test` pass.
 Manual emulator testing also confirms logged-out rejection and authenticated
@@ -490,8 +512,10 @@ discarded.
 - Registration, login, JWT verification, current-user lookup and per-user
   Thought authorization are implemented for local learning and testing.
 - Account deletion and refresh tokens are not implemented. Email verification
-  has backend storage and token issue/consume logic, but no HTTP flow, email
-  delivery, resend limits or Flutter UI yet.
+  has backend registration, resend and confirmation flows, but no real mail
+  provider or Flutter UI yet. The fake sender delivers nothing externally.
+- Verification send limits are per account. Registration has no IP or global
+  send limit; those controls are needed before enabling a real mail provider.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -683,10 +707,17 @@ discarded.
   expiry and consumes each token once in a transaction before marking the user
   verified. The migration applied to local PostgreSQL; all 22 backend unit
   tests and 10 integration tests passed, including hash storage, expiry,
-  replay and concurrent consumption. Email delivery, resend, HTTP endpoints
-  and Flutter status remain later tasks.
-- [ ] Day 63: add a mail-sending adapter, development fake sender, resend flow and
-  rate limits. External services require explicit approval
+  replay and concurrent consumption. At the Day 62 checkpoint, email delivery,
+  resend, HTTP endpoints and Flutter status remained later tasks.
+- [x] Day 63: added an injectable mailer contract and in-memory fake sender.
+  With `EMAIL_DELIVERY_MODE=fake`, registration requests an initial token;
+  authenticated resend uses a PostgreSQL user-row lock to enforce one request
+  per minute and five per 24 hours. Failed delivery removes the unused
+  token so a retry can proceed. `POST /auth/email-verification/confirm` consumes
+  a token once. No external mail provider is configured. Local verification
+  passed 22 backend unit tests, 14 integration tests and isolated HTTP checks
+  for registration, resend and confirmation. Flutter status and controls remain
+  Day 64 work; a real mail service requires explicit approval.
 - [ ] Day 64: show email-verification state, resend and results in Flutter without
   restricting local-only use
 - [ ] Day 65: add short-lived access tokens plus refresh-token hashing, rotation,
