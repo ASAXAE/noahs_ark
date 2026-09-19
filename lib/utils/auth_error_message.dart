@@ -29,6 +29,11 @@ String authErrorMessage(Object error) {
     'invalid access token': '登录状态无效，请重新登录',
     'invalid or expired access token': '登录已过期，请重新登录',
     'user account not found': '找不到该用户账户',
+    'email delivery is not configured': '本地邮件发送尚未启用',
+    'please wait before requesting another verification email': '请求过于频繁，请稍后再试',
+    'verification email is temporarily unavailable': '验证邮件暂时无法发送，请稍后重试',
+    'invalid or expired verification token': '验证令牌无效、已过期或已经使用',
+    'failed to confirm email verification': '确认邮箱验证失败，请稍后重试',
   };
 
   final translatedMessage = translatedMessages[normalizedMessage];

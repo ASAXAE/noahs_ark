@@ -57,6 +57,7 @@ describe('Auth API', () => {
             );
 
             assert.equal(registeredUser.email, email);
+            assert.equal(registeredUser.emailVerifiedAt, null);
 
             assert.equal(registeredUser.password, undefined);
             assert.equal(
@@ -246,6 +247,7 @@ describe('Auth API', () => {
            );
 
            assert.equal(loginResult.user.email, email);
+           assert.equal(loginResult.user.emailVerifiedAt, null);
            assert.equal(loginResult.user.password, undefined);
            assert.equal(
                loginResult.user.passwordHash,
@@ -287,6 +289,41 @@ describe('Auth API', () => {
            );
 
            assert.equal(currentUser.email, email);
+
+           assert.equal(currentUser.emailVerifiedAt, null);
+
+           await pool.query(
+               `
+                   UPDATE users
+                   SET email_verified_at = clock_timestamp()
+                   WHERE email = $1
+               `,
+               [email],
+           );
+
+           const verifiedMeResponse = await fetch(
+               `${baseUrl}/auth/me`,
+               {
+                   headers: {
+                       Authorization:
+                           `Bearer ${loginResult.accessToken}`,
+                   },
+               },
+           );
+
+           assert.equal(verifiedMeResponse.status, 200);
+
+           const verifiedUser = await verifiedMeResponse.json();
+
+           assert.equal(
+               typeof verifiedUser.emailVerifiedAt,
+               'string',
+           );
+           assert.equal(
+               Number.isNaN(Date.parse(verifiedUser.emailVerifiedAt)),
+               false,
+           );
+
            assert.equal(currentUser.password, undefined);
            assert.equal(currentUser.passwordHash, undefined);
 

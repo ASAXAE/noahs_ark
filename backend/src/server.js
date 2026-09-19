@@ -81,6 +81,7 @@ app.post('/auth/register', async (request, response) => {
                     id,
                     display_name AS "displayName",
                     email,
+                    email_verified_at AS "emailVerifiedAt",
                     created_at AS "createdAt"
             `,
             [
@@ -142,6 +143,7 @@ app.post('/auth/login', async (request, response) => {
                     id,
                     display_name AS "displayName",
                     email,
+                    email_verified_at AS "emailVerifiedAt",
                     password_hash AS "passwordHash",
                     created_at AS "createdAt"
                 FROM users
@@ -180,6 +182,7 @@ app.post('/auth/login', async (request, response) => {
                 id: user.id,
                 displayName: user.displayName,
                 email: user.email,
+                emailVerifiedAt: user.emailVerifiedAt,
                 createdAt: user.createdAt,
             },
         });
@@ -203,6 +206,7 @@ app.get(
                         id,
                         display_name AS "displayName",
                         email,
+                        email_verified_at AS "emailVerifiedAt",
                         created_at AS "createdAt"
                     FROM users
                     WHERE id = $1

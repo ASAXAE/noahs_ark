@@ -229,4 +229,58 @@ class ApiService {
 
     return AuthUser.fromJson(json);
   }
+
+  Future<void> resendVerificationEmail() async {
+    final uri = Uri.parse('$_localBaseUrl/auth/email-verification/resend');
+    final headers = await _authenticatedHeaders();
+
+    final response = await http
+        .post(uri, headers: headers)
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 202) {
+      final message =
+          json['message'] as String? ?? 'Verification email request failed';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
+    }
+  }
+
+  Future<void> confirmEmailVerification({required String token}) async {
+    final normalizedToken = token.trim();
+
+    if (normalizedToken.isEmpty) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Invalid or expired verification token',
+      );
+    }
+
+    final uri = Uri.parse('$_localBaseUrl/auth/email-verification/confirm');
+
+    final response = await http
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'token': normalizedToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 200) {
+      final message =
+          json['message'] as String? ?? 'Failed to confirm email verification';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
+    }
+
+    if (json['verified'] != true) {
+      throw const FormatException('Email verification response is invalid');
+    }
+  }
 }

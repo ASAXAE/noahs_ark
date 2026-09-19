@@ -716,10 +716,21 @@ discarded.
   token so a retry can proceed. `POST /auth/email-verification/confirm` consumes
   a token once. No external mail provider is configured. Local verification
   passed 22 backend unit tests, 14 integration tests and isolated HTTP checks
-  for registration, resend and confirmation. Flutter status and controls remain
-  Day 64 work; a real mail service requires explicit approval.
-- [ ] Day 64: show email-verification state, resend and results in Flutter without
-  restricting local-only use
+  for registration, resend and confirmation. At the Day 63 checkpoint, Flutter
+  status and controls remained Day 64 work; a real mail service still requires
+  explicit approval.
+- [x] Day 64: exposed nullable `emailVerifiedAt` state through registration,
+  login and `/auth/me`, then parsed it into Flutter `AuthUser`. The logged-in
+  account card now shows verified or unverified state and opens a dedicated
+  verification page without restricting local records, Flash Thought, audio or
+  backups. The page supports authenticated resend, client-side token validation,
+  confirmation results and immediate session refresh after verification.
+  Local verification passed all 22 backend unit tests, 14 backend integration
+  tests and 63 Flutter tests. A Debug APK was built and installed on the Android
+  test device. Physical-device checks passed for unverified status, empty-token
+  validation, resend feedback, successful single-use confirmation and verified
+  state restoration after an App restart. No external mail provider was added
+  and `flutter analyze` was not run.
 - [ ] Day 65: add short-lived access tokens plus refresh-token hashing, rotation,
   reuse detection, revocation and secure storage
 - [ ] Day 66: add password recovery and reset without revealing whether an email

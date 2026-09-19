@@ -6,6 +6,7 @@ import '../../database/ark_database.dart';
 import '../../services/backup_service.dart';
 
 import '../auth/login_page.dart';
+import 'email_verification_page.dart';
 import 'local_first_info_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -299,6 +300,30 @@ class SettingsPage extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      key: const ValueKey('email-verification-entry'),
+                      leading: Icon(
+                        user.isEmailVerified
+                            ? Icons.verified_outlined
+                            : Icons.mark_email_unread_outlined,
+                      ),
+                      title: Text(user.isEmailVerified ? '邮箱已验证' : '邮箱未验证'),
+                      subtitle: Text(
+                        user.isEmailVerified ? '账户邮箱验证已经完成' : '可以继续验证，本地功能不受影响',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () async {
+                        await Navigator.of(context).push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) => EmailVerificationPage(
+                              session: session,
+                              authSessionNotifier: authSessionNotifier,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const Divider(height: 1),
                     ListTile(
