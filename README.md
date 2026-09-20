@@ -36,10 +36,13 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Registration form with password confirmation and client-side validation
 - Refined authentication UX with clear login/register switching, disabled form
   controls while submitting and localized Chinese error feedback
-- JWT access tokens stored with Flutter secure storage
-- Login restoration after an app restart and explicit logout
+- Access and refresh tokens stored together with Flutter secure storage
+- Login restoration after an app restart and explicit logout that revokes the
+  server-side refresh-token family without deleting local records
 - Saved JWT bearer tokens automatically attached to every experimental Thought
   API request (`GET`, `POST`, `PATCH` and `DELETE`)
+- Automatic single-flight refresh after a 401 response, followed by at most one
+  retry of the rejected protected request
 - Account status card, top-of-page login confirmation and logout confirmation
   that explains local records remain on the device
 - Branded Android adaptive launcher icon
@@ -65,6 +68,10 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   characters with at least one English letter and one number
 - Password hashing with `bcryptjs`; plain-text passwords are never stored
 - Signed JWT access tokens protect `GET /auth/me` and every Thought CRUD route
+- Short-lived 15-minute access tokens plus rotating 30-day refresh-token
+  families stored in PostgreSQL only as SHA-256 hashes
+- Refresh-token replay detection, family revocation, explicit logout and
+  per-user locking for concurrent refresh safety
 - PostgreSQL Thought queries are scoped to the authenticated user, with
   two-account isolation coverage
 - Duplicate-email protection, credential verification and authentication tests
@@ -103,9 +110,13 @@ Experimental server records
 
 Flutter UI
     ↓
-ApiService (HTTP + JSON + saved Bearer token)
+ApiService (HTTP + JSON + secure token bundle)
+    ↓
+AuthTokenCoordinator (single-flight refresh + one retry)
     ↓
 Express API
+    ↓
+Short-lived JWT + hashed rotating refresh-token family
     ↓
 JWT authentication + parameterized, user-scoped SQL
     ↓
@@ -164,12 +175,15 @@ backend/
 ├── integration/
 │   ├── auth_api.integration.test.js
 │   ├── email_verification.integration.test.js
+│   ├── refresh_token.integration.test.js
+│   ├── refresh_token_api.integration.test.js
 │   └── thought_api.integration.test.js
 ├── sql/
 │   ├── 001_create_users.sql
 │   ├── 002_create_thoughts.sql
 │   ├── 003_add_password_hash.sql
-│   └── 004_add_email_verification.sql
+│   ├── 004_add_email_verification.sql
+│   └── 005_add_refresh_tokens.sql
 ├── src/
 │   ├── auth_middleware.js
 │   ├── auth_token.js
@@ -178,6 +192,7 @@ backend/
 │   ├── email_verification.js
 │   ├── migrate.js
 │   ├── migration_runner.js
+│   ├── refresh_token.js
 │   ├── server.js
 │   ├── thought_validation.js
 │   ├── verification_delivery.js
@@ -202,7 +217,9 @@ assets/
 | `GET` | `/health` | Check whether Express is running |
 | `GET` | `/database-health` | Check the PostgreSQL connection |
 | `POST` | `/auth/register` | Register a backend test user; request initial verification when fake delivery is enabled |
-| `POST` | `/auth/login` | Verify credentials and issue a JWT access token |
+| `POST` | `/auth/login` | Verify credentials and issue an access/refresh token pair |
+| `POST` | `/auth/token/refresh` | Rotate a valid refresh token and issue a replacement token pair |
+| `POST` | `/auth/logout` | Revoke the refresh-token family; successful logout returns 204 |
 | `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
 | `POST` | `/auth/email-verification/resend` | Request verification for the authenticated account; rate-limited requests return 429 |
 | `POST` | `/auth/email-verification/confirm` | Consume a verification token from the JSON body; invalid, expired or used tokens return 400 |
@@ -255,21 +272,28 @@ Example login request body:
 }
 ```
 
-The login endpoint returns a signed JWT access token plus safe user fields. The
-Flutter app verifies the token through `/auth/me`, stores it with secure
-platform storage and restores the optional account session after an app
-restart. Logging out deletes the stored token. Local SQLite records remain
-available whether or not the user is logged in. Authentication forms disable
-their controls while a request is running, translate known API and network
-errors into Chinese user-facing messages, and require confirmation before
-logout.
+The login endpoint returns a signed 15-minute JWT access token, a random refresh
+token, its absolute expiry and safe user fields. The refresh token belongs to a
+30-day token family and is stored in PostgreSQL only as a SHA-256 hash. Flutter
+stores the token bundle with secure platform storage and restores the optional
+account session after an app restart.
 
-For the experimental server-record interface, `ApiService` reads the saved
-access token before each Thought request and sends it as
-`Authorization: Bearer <token>`. Logged-out requests are rejected locally, and
-Express uses the verified JWT user ID to isolate PostgreSQL records between
-accounts. This path remains separate from the default SQLite journal: local
-records are never uploaded automatically.
+When a protected request receives 401, `AuthTokenCoordinator` permits only one
+refresh operation at a time. It persists the rotated token pair and retries the
+original request once. A reused old refresh token revokes the complete family.
+Confirmed logout sends the refresh token to `/auth/logout` before clearing the
+local token bundle; local SQLite records remain available. If the server cannot
+be reached, Flutter still clears the local session and reports that remote
+revocation could not be confirmed. Authentication forms disable their controls
+while a request is running and translate known API and network errors into
+Chinese user-facing messages.
+
+For the experimental server-record interface, `AuthTokenCoordinator` reads the
+secure token bundle before each Thought request, and `ApiService` sends the
+access token as `Authorization: Bearer <token>`. Logged-out requests are
+rejected locally, and Express uses the verified JWT user ID to isolate
+PostgreSQL records between accounts. This path remains separate from the
+default SQLite journal: local records are never uploaded automatically.
 
 ## Local setup
 
@@ -302,7 +326,8 @@ DB_NAME=noahs_ark
 DB_USER=postgres
 DB_PASSWORD=your_postgresql_password
 JWT_SECRET=replace_with_a_long_random_secret
-JWT_EXPIRES_IN=1h
+JWT_EXPIRES_IN=15m
+REFRESH_TOKEN_TTL_DAYS=30
 EMAIL_DELIVERY_MODE=disabled
 ```
 
@@ -424,6 +449,7 @@ node --check src/server.js
 node --check src/database.js
 node --check src/auth_token.js
 node --check src/auth_middleware.js
+node --check src/refresh_token.js
 npm test
 npm run test:integration
 ```
@@ -438,7 +464,10 @@ duplicate-email protection and generic rejection of invalid credentials are
 covered as well. Email-verification tests cover token hashing, expiry,
 single-use consumption, concurrent requests, one-per-minute and five-per-day
 limits, fake delivery and failed-send cleanup. Temporary records and users
-created by the tests are removed afterward.
+created by the tests are removed afterward. Refresh-token coverage verifies
+hash-only storage, rotation with one absolute family expiry, concurrent refresh
+serialization, replay-triggered family revocation, explicit logout and the HTTP
+refresh flow.
 
 Latest Day 41 client verification: `flutter analyze` and `flutter test` pass.
 Manual emulator testing also confirms logged-out rejection and authenticated
@@ -498,10 +527,14 @@ discarded.
 - Authentication responses never include a password or password hash.
 - Incorrect passwords and unknown emails receive the same generic login error.
 - JWT signing secrets stay in the ignored backend `.env` file.
-- Flutter stores the access token with secure platform storage rather than
-  SQLite or plain-text preferences.
-- Logging out deletes the locally stored access token without deleting journal
-  records.
+- Access tokens expire after 15 minutes. Refresh-token families have a 30-day
+  absolute expiry and do not extend indefinitely when rotated.
+- PostgreSQL stores only SHA-256 refresh-token hashes. A replayed token revokes
+  its complete family.
+- Flutter stores the access token, refresh token and refresh expiry with secure
+  platform storage rather than SQLite or plain-text preferences.
+- Logging out revokes the server-side refresh-token family and deletes the
+  local token bundle without deleting journal records.
 - Production cloud sync will still require HTTPS, account deletion, secure
   secret management, deployment hardening and a privacy policy.
 - An administration interface must not expose private journal content by
@@ -511,9 +544,12 @@ discarded.
 
 - Registration, login, JWT verification, current-user lookup and per-user
   Thought authorization are implemented for local learning and testing.
-- Account deletion and refresh tokens are not implemented. Email verification
-  has backend registration, resend and confirmation flows, but no real mail
-  provider or Flutter UI yet. The fake sender delivers nothing externally.
+- Password recovery and account deletion are not implemented. Account deletion
+  will need to remove server data and sessions without deleting local SQLite,
+  backups or original audio by default.
+- Email verification has backend registration, resend and confirmation plus a
+  Flutter verification page, but no real mail provider. The fake sender
+  delivers nothing externally.
 - Verification send limits are per account. Registration has no IP or global
   send limit; those controls are needed before enabling a real mail provider.
 - Server records are shown in an experimental test interface.
@@ -731,8 +767,20 @@ discarded.
   validation, resend feedback, successful single-use confirmation and verified
   state restoration after an App restart. No external mail provider was added
   and `flutter analyze` was not run.
-- [ ] Day 65: add short-lived access tokens plus refresh-token hashing, rotation,
-  reuse detection, revocation and secure storage
+- [x] Day 65: shortened access-token lifetime to 15 minutes and added
+  `005_add_refresh_tokens.sql`. Refresh tokens are random 32-byte values stored
+  in PostgreSQL only as SHA-256 hashes, with a 30-day absolute family expiry.
+  Rotation replaces each token after use; replay detection revokes the entire
+  token family, and logout revokes that family explicitly. Per-user database
+  locking prevents concurrent rotation races. Flutter stores the access token,
+  refresh token and absolute expiry as one secure bundle, shares one refresh
+  across concurrent 401 responses, retries each protected request at most once
+  and clears rejected sessions. Local verification passed all 22 backend unit
+  tests, 20 backend integration tests and 84 Flutter tests. Physical-device
+  checks passed for restart restoration, remote logout and transparent refresh
+  after testing with a temporary 10-second access-token lifetime; the local
+  backend was restored to the normal 15-minute setting afterward.
+  `flutter analyze` was not run.
 - [ ] Day 66: add password recovery and reset without revealing whether an email
   exists, and revoke old sessions after a successful reset
 - [ ] Day 67: add account deletion for cloud accounts, server data and sessions

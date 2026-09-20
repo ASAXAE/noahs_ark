@@ -11,6 +11,7 @@ import '../detail/thought_detail_page.dart';
 import '../../services/api_service.dart';
 import '../settings/settings_page.dart';
 import '../../models/auth_session.dart';
+import '../../models/auth_user.dart';
 import '../../services/auth_session_storage.dart';
 import '../../services/api_exception.dart';
 import '../../services/transcription_model_manager.dart';
@@ -310,28 +311,54 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _restoreAuthSession() async {
-    try {
-      final accessToken = await AuthSessionStorage.instance.readAccessToken();
+    final storage = AuthSessionStorage.instance;
 
-      if (accessToken == null || accessToken.isEmpty) {
+    try {
+      final storedTokens = await storage.readTokens();
+
+      if (storedTokens == null) {
+        await storage.deleteTokens();
         return;
       }
 
-      final user = await ApiService().fetchCurrentUser(
-        accessToken: accessToken,
-      );
+      if (storedTokens.isRefreshTokenExpiredAt(DateTime.now())) {
+        await storage.deleteTokens();
+        return;
+      }
+
+      final apiService = ApiService();
+      var tokens = storedTokens;
+      AuthUser user;
+
+      try {
+        user = await apiService.fetchCurrentUser(
+          accessToken: tokens.accessToken,
+        );
+      } on ApiException catch (error) {
+        if (!error.isUnauthorized) {
+          rethrow;
+        }
+
+        tokens = await apiService.refreshTokens(
+          refreshToken: tokens.refreshToken,
+        );
+
+        await storage.saveTokens(tokens);
+
+        user = await apiService.fetchCurrentUser(
+          accessToken: tokens.accessToken,
+        );
+      }
 
       if (!mounted) return;
 
-      _authSessionNotifier.value = AuthSession(
-        accessToken: accessToken,
-        user: user,
-      );
+      _authSessionNotifier.value = AuthSession(tokens: tokens, user: user);
     } on ApiException catch (error) {
       if (error.isUnauthorized) {
-        await AuthSessionStorage.instance.deleteAccessToken();
+        await storage.deleteTokens();
 
         if (!mounted) return;
+
         _authSessionNotifier.value = null;
       }
 

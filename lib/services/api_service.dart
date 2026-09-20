@@ -2,19 +2,33 @@ import 'dart:convert';
 import '../models/auth_session.dart';
 import '../models/auth_user.dart';
 import '../models/thought.dart';
+import '../models/auth_tokens.dart';
 import 'api_exception.dart';
-import 'auth_session_storage.dart';
+import 'auth_token_coordinator.dart';
 
 import 'package:http/http.dart' as http;
 
 class ApiService {
+  ApiService({
+    http.Client? httpClient,
+    AuthTokenCoordinator? authTokenCoordinator,
+  }) : _httpClient = httpClient ?? _sharedHttpClient,
+       _authTokenCoordinator =
+           authTokenCoordinator ?? AuthTokenCoordinator.instance;
+
+  static final http.Client _sharedHttpClient = http.Client();
+
+  final http.Client _httpClient;
+  final AuthTokenCoordinator _authTokenCoordinator;
   static const String _exampleUrl =
       'https://jsonplaceholder.typicode.com/todos/1';
 
   Future<String> fetchExampleTitle() async {
     final uri = Uri.parse(_exampleUrl);
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _httpClient
+        .get(uri)
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
       throw Exception('请求失败: ${response.statusCode}');
@@ -30,26 +44,72 @@ class ApiService {
     defaultValue: 'http://127.0.0.1:3000',
   );
 
-  Future<Map<String, String>> _authenticatedHeaders({
+  Future<http.Response> _sendAuthenticated({
+    required String method,
+    required Uri uri,
+    String? body,
     bool includeJsonContentType = false,
   }) async {
-    final accessToken = await AuthSessionStorage.instance.readAccessToken();
+    Future<http.Response> send(String accessToken) {
+      final headers = {
+        if (includeJsonContentType)
+          'Content-Type': 'application/json; charset=UTF-8',
+        'Authorization': 'Bearer $accessToken',
+      };
 
-    if (accessToken == null || accessToken.isEmpty) {
-      throw const ApiException(statusCode: 401, message: '请先登录');
+      late final Future<http.Response> request;
+
+      switch (method) {
+        case 'GET':
+          request = _httpClient.get(uri, headers: headers);
+        case 'POST':
+          request = _httpClient.post(uri, headers: headers, body: body);
+        case 'PATCH':
+          request = _httpClient.patch(uri, headers: headers, body: body);
+        case 'DELETE':
+          request = _httpClient.delete(uri, headers: headers);
+        default:
+          throw ArgumentError.value(
+            method,
+            'method',
+            'Unsupported HTTP method',
+          );
+      }
+
+      return request.timeout(const Duration(seconds: 10));
     }
 
-    return {
-      if (includeJsonContentType)
-        'Content-Type': 'application/json; charset=UTF-8',
-      'Authorization': 'Bearer $accessToken',
-    };
+    final rejectedAccessToken = await _authTokenCoordinator.readAccessToken();
+
+    var response = await send(rejectedAccessToken);
+
+    if (response.statusCode != 401) {
+      return response;
+    }
+
+    final refreshedTokens = await _authTokenCoordinator
+        .refreshAfterUnauthorized(
+          rejectedAccessToken: rejectedAccessToken,
+          refresh: (refreshToken) {
+            return refreshTokens(refreshToken: refreshToken);
+          },
+        );
+
+    response = await send(refreshedTokens.accessToken);
+
+    if (response.statusCode == 401) {
+      await _authTokenCoordinator.clearSession();
+    }
+
+    return response;
   }
 
   Future<String> fetchHealthMessage() async {
     final uri = Uri.parse('$_localBaseUrl/health');
 
-    final response = await http.get(uri).timeout(const Duration(seconds: 10));
+    final response = await _httpClient
+        .get(uri)
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
@@ -62,11 +122,7 @@ class ApiService {
   Future<List<Thought>> fetchThoughts() async {
     final uri = Uri.parse('$_localBaseUrl/thoughts');
 
-    final headers = await _authenticatedHeaders();
-
-    final response = await http
-        .get(uri, headers: headers)
-        .timeout(const Duration(seconds: 10));
+    final response = await _sendAuthenticated(method: 'GET', uri: uri);
 
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
@@ -82,7 +138,6 @@ class ApiService {
 
   Future<Thought> createTestThought() async {
     final uri = Uri.parse('$_localBaseUrl/thoughts');
-    final headers = await _authenticatedHeaders(includeJsonContentType: true);
 
     final requestBody = jsonEncode({
       'title': 'Day 16 API 测试',
@@ -90,9 +145,12 @@ class ApiService {
       'tag': '学习',
     });
 
-    final response = await http
-        .post(uri, headers: headers, body: requestBody)
-        .timeout(const Duration(seconds: 10));
+    final response = await _sendAuthenticated(
+      method: 'POST',
+      uri: uri,
+      body: requestBody,
+      includeJsonContentType: true,
+    );
 
     if (response.statusCode != 201) {
       throw Exception('HTTP ${response.statusCode}');
@@ -106,7 +164,6 @@ class ApiService {
 
   Future<Thought> updateThought(Thought thought) async {
     final id = thought.id;
-    final headers = await _authenticatedHeaders(includeJsonContentType: true);
 
     if (id == null) {
       throw ArgumentError('Thought id cannot be null');
@@ -121,9 +178,12 @@ class ApiService {
       'isFavorite': thought.isFavorite,
     });
 
-    final response = await http
-        .patch(uri, headers: headers, body: requestBody)
-        .timeout(const Duration(seconds: 10));
+    final response = await _sendAuthenticated(
+      method: 'PATCH',
+      uri: uri,
+      body: requestBody,
+      includeJsonContentType: true,
+    );
 
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
@@ -137,11 +197,8 @@ class ApiService {
 
   Future<void> deleteThought(int id) async {
     final uri = Uri.parse('$_localBaseUrl/thoughts/$id');
-    final headers = await _authenticatedHeaders();
 
-    final response = await http
-        .delete(uri, headers: headers)
-        .timeout(const Duration(seconds: 10));
+    final response = await _sendAuthenticated(method: 'DELETE', uri: uri);
 
     if (response.statusCode != 204) {
       throw Exception('HTTP ${response.statusCode}');
@@ -161,7 +218,7 @@ class ApiService {
       'password': password,
     });
 
-    final response = await http
+    final response = await _httpClient
         .post(
           uri,
           headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -192,7 +249,7 @@ class ApiService {
       'password': password,
     });
 
-    final response = await http
+    final response = await _httpClient
         .post(
           uri,
           headers: {'Content-Type': 'application/json; charset=UTF-8'},
@@ -211,10 +268,52 @@ class ApiService {
     return AuthSession.fromJson(json);
   }
 
+  Future<AuthTokens> refreshTokens({required String refreshToken}) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/token/refresh');
+
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'refreshToken': refreshToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 200) {
+      final message = json['message'] as String? ?? 'Failed to refresh session';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
+    }
+
+    return AuthTokens.fromJson(json);
+  }
+
+  Future<void> logout({required String refreshToken}) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/logout');
+
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'refreshToken': refreshToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 204) {
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: 'Failed to log out',
+      );
+    }
+  }
+
   Future<AuthUser> fetchCurrentUser({required String accessToken}) async {
     final uri = Uri.parse('$_localBaseUrl/auth/me');
 
-    final response = await http
+    final response = await _httpClient
         .get(uri, headers: {'Authorization': 'Bearer $accessToken'})
         .timeout(const Duration(seconds: 10));
 
@@ -232,11 +331,8 @@ class ApiService {
 
   Future<void> resendVerificationEmail() async {
     final uri = Uri.parse('$_localBaseUrl/auth/email-verification/resend');
-    final headers = await _authenticatedHeaders();
 
-    final response = await http
-        .post(uri, headers: headers)
-        .timeout(const Duration(seconds: 10));
+    final response = await _sendAuthenticated(method: 'POST', uri: uri);
 
     final json =
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
@@ -261,7 +357,7 @@ class ApiService {
 
     final uri = Uri.parse('$_localBaseUrl/auth/email-verification/confirm');
 
-    final response = await http
+    final response = await _httpClient
         .post(
           uri,
           headers: {'Content-Type': 'application/json; charset=UTF-8'},

@@ -5,6 +5,7 @@ import 'package:noahs_ark_app/models/auth_user.dart';
 import 'package:noahs_ark_app/screens/settings/email_verification_page.dart';
 import 'package:noahs_ark_app/screens/settings/settings_page.dart';
 import 'package:noahs_ark_app/services/api_service.dart';
+import 'package:noahs_ark_app/models/auth_tokens.dart';
 
 class FakeApiService extends ApiService {
   FakeApiService({required this.refreshedUser});
@@ -46,7 +47,11 @@ AuthUser createUser({required bool isVerified}) {
 
 AuthSession createSession({required bool isVerified}) {
   return AuthSession(
-    accessToken: 'day-64-access-token',
+    tokens: AuthTokens(
+      accessToken: 'day-64-access-token',
+      refreshToken: 'day-65-refresh-token',
+      refreshTokenExpiresAt: DateTime.utc(2026, 10, 20),
+    ),
     user: createUser(isVerified: isVerified),
   );
 }

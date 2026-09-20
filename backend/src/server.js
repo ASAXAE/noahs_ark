@@ -31,6 +31,11 @@ const {
 const {
     consumeEmailVerificationToken,
 } = require('./email_verification');
+const {
+    issueRefreshToken,
+    rotateRefreshToken,
+    revokeRefreshToken,
+} = require('./refresh_token');
 
 const app = express();
 
@@ -176,8 +181,15 @@ app.post('/auth/login', async (request, response) => {
 
         const accessToken = createAccessToken(user.id);
 
+        const refreshSession = await issueRefreshToken(
+            pool,
+            user.id,
+        );
+
         return response.status(200).json({
             accessToken,
+            refreshToken: refreshSession.refreshToken,
+            refreshTokenExpiresAt: refreshSession.expiresAt,
             user: {
                 id: user.id,
                 displayName: user.displayName,
@@ -191,6 +203,69 @@ app.post('/auth/login', async (request, response) => {
 
         return response.status(500).json({
             message: 'Failed to log in user',
+        });
+    }
+});
+
+app.post('/auth/token/refresh', async (request, response) => {
+    const refreshToken = request.body?.refreshToken;
+
+    try {
+        const result = await rotateRefreshToken(
+            pool,
+            refreshToken,
+        );
+
+        if (result.status !== 'rotated') {
+            if (result.status === 'reused') {
+                console.warn(
+                    'Refresh token reuse detected; token family revoked',
+                );
+            }
+
+            return response.status(401).json({
+                message: 'Invalid or expired refresh token',
+            });
+        }
+
+        const accessToken =
+            createAccessToken(result.userId);
+
+        return response.status(200).json({
+            accessToken,
+            refreshToken: result.refreshToken,
+            refreshTokenExpiresAt: result.expiresAt,
+        });
+    } catch (error) {
+        console.error(
+            'Failed to refresh session:',
+            error.message,
+        );
+
+        return response.status(500).json({
+            message: 'Failed to refresh session',
+        });
+    }
+});
+
+app.post('/auth/logout', async (request, response) => {
+    const refreshToken = request.body?.refreshToken;
+
+    try {
+        await revokeRefreshToken(
+            pool,
+            refreshToken,
+        );
+
+        return response.status(204).send();
+    } catch (error) {
+        console.error(
+            'Failed to revoke session:',
+            error.message,
+        );
+
+        return response.status(500).json({
+            message: 'Failed to revoke session',
         });
     }
 });

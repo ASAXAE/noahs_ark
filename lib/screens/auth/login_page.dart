@@ -43,14 +43,11 @@ class _LoginPageState extends State<LoginPage> {
         accessToken: loginSession.accessToken,
       );
 
-      final session = AuthSession(
-        accessToken: loginSession.accessToken,
-        user: currentUser,
-      );
+      final session = loginSession.withUser(currentUser);
 
       if (!mounted) return;
 
-      await AuthSessionStorage.instance.saveAccessToken(session.accessToken);
+      await AuthSessionStorage.instance.saveTokens(session.tokens);
 
       if (!mounted) return;
 

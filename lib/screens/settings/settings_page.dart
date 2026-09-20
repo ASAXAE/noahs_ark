@@ -4,6 +4,7 @@ import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../database/ark_database.dart';
 import '../../services/backup_service.dart';
+import '../../services/api_service.dart';
 
 import '../auth/login_page.dart';
 import 'email_verification_page.dart';
@@ -14,10 +15,14 @@ class SettingsPage extends StatelessWidget {
     super.key,
     required this.authSessionNotifier,
     required this.onThoughtsChanged,
+    this.apiService,
+    this.authSessionStorage,
   });
 
   final ValueNotifier<AuthSession?> authSessionNotifier;
   final Future<void> Function() onThoughtsChanged;
+  final ApiService? apiService;
+  final AuthSessionStorage? authSessionStorage;
 
   Future<void> _exportBackup(BuildContext context) async {
     try {
@@ -161,11 +166,15 @@ class SettingsPage extends StatelessWidget {
         content: const Text('退出后账户功能将暂停，但本地记录不会被删除。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
+            onPressed: () {
+              Navigator.of(dialogContext).pop(false);
+            },
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
+            onPressed: () {
+              Navigator.of(dialogContext).pop(true);
+            },
             child: const Text('退出登录'),
           ),
         ],
@@ -176,17 +185,49 @@ class SettingsPage extends StatelessWidget {
       return;
     }
 
-    await AuthSessionStorage.instance.deleteAccessToken();
+    final session = authSessionNotifier.value;
+
+    if (session == null) {
+      return;
+    }
+
+    var remoteLogoutFailed = false;
+
+    try {
+      await (apiService ?? ApiService()).logout(
+        refreshToken: session.tokens.refreshToken,
+      );
+    } catch (_) {
+      remoteLogoutFailed = true;
+    }
+
+    try {
+      await (authSessionStorage ?? AuthSessionStorage.instance).deleteTokens();
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('退出失败：无法清除本地登录信息，请重试'),
+        ),
+      );
+
+      return;
+    }
 
     authSessionNotifier.value = null;
 
-    if (!context.mounted) return;
+    if (!context.mounted) {
+      return;
+    }
+
+    final message = remoteLogoutFailed ? '已退出本机，但服务器会话未能撤销' : '已退出登录，本地记录仍然保留';
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        behavior: SnackBarBehavior.floating,
-        content: Text('已退出登录，本地记录仍然保留'),
-      ),
+      SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
     );
   }
 

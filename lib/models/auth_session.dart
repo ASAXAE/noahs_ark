@@ -1,20 +1,20 @@
+import 'auth_tokens.dart';
 import 'auth_user.dart';
 
 class AuthSession {
-  const AuthSession({required this.accessToken, required this.user});
+  const AuthSession({required this.tokens, required this.user});
 
-  final String accessToken;
+  final AuthTokens tokens;
   final AuthUser user;
 
-  factory AuthSession.fromJson(Map<String, dynamic> json) {
-    final rawAccessToken = json['accessToken'];
-    final rawUser = json['user'];
+  String get accessToken => tokens.accessToken;
 
-    if (rawAccessToken is! String || rawAccessToken.isEmpty) {
-      throw const FormatException(
-        'Login response does not contain an access token',
-      );
-    }
+  String get refreshToken => tokens.refreshToken;
+
+  DateTime get refreshTokenExpiresAt => tokens.refreshTokenExpiresAt;
+
+  factory AuthSession.fromJson(Map<String, dynamic> json) {
+    final rawUser = json['user'];
 
     if (rawUser is! Map<String, dynamic>) {
       throw const FormatException(
@@ -23,8 +23,12 @@ class AuthSession {
     }
 
     return AuthSession(
-      accessToken: rawAccessToken,
+      tokens: AuthTokens.fromJson(json),
       user: AuthUser.fromJson(rawUser),
     );
+  }
+
+  AuthSession withUser(AuthUser updatedUser) {
+    return AuthSession(tokens: tokens, user: updatedUser);
   }
 }

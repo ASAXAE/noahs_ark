@@ -83,10 +83,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
           accessToken: _session.accessToken,
         );
 
-        final refreshedSession = AuthSession(
-          accessToken: _session.accessToken,
-          user: refreshedUser,
-        );
+        final refreshedSession = _session.withUser(refreshedUser);
 
         if (!mounted) return;
 
