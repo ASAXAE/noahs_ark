@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../services/api_service.dart';
-import '../../models/auth_session.dart';
 import '../../services/auth_session_storage.dart';
 import '../../utils/auth_error_message.dart';
 import 'register_page.dart';

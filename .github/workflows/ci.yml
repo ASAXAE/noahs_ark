@@ -47,7 +47,8 @@ jobs:
       DB_USER: postgres
       DB_PASSWORD: postgres
       JWT_SECRET: day55-integration-test-secret-only
-      JWT_EXPIRES_IN: 1h
+      JWT_EXPIRES_IN: 15m
+      REFRESH_TOKEN_TTL_DAYS: 30
       API_BASE_URL: http://127.0.0.1:3000
 
     services:
