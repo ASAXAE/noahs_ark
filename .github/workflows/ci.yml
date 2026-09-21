@@ -49,6 +49,8 @@ jobs:
       JWT_SECRET: day55-integration-test-secret-only
       JWT_EXPIRES_IN: 15m
       REFRESH_TOKEN_TTL_DAYS: 30
+      PASSWORD_RESET_TOKEN_TTL_MINUTES: 60
+      EMAIL_DELIVERY_MODE: fake
       API_BASE_URL: http://127.0.0.1:3000
 
     services:

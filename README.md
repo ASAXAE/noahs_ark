@@ -13,8 +13,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 
 > Status: V1 release candidate. The offline app is functional and the signed
 > Android APK has passed local smoke testing. The experimental backend now
-> supports authenticated, per-user Thought CRUD, but it is not a
-> production-ready sync service.
+> supports authenticated, per-user Thought CRUD plus local email-verification
+> and password-reset exercises, but it is not a production-ready sync service.
 
 ## Features / 已完成功能
 
@@ -45,6 +45,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   retry of the rejected protected request
 - Account status card, top-of-page login confirmation and logout confirmation
   that explains local records remain on the device
+- Forgot-password navigation and a dedicated reset page with a prefilled email,
+  privacy-preserving request feedback, token/password validation and a focused
+  return to login after a successful reset
 - Branded Android adaptive launcher icon
 - JSON serialization, backup parsing and model tests
 - Local Flash Thought inbox with original-audio playback and offline transcription
@@ -77,6 +80,9 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Duplicate-email protection, credential verification and authentication tests
 - Email-verification token hashes, authenticated resend, single-use confirmation,
   per-account send limits and an explicitly configured in-memory fake sender
+- Password-reset request and confirmation endpoints with generic account-safe
+  responses, SHA-256 token hashes, single-use consumption, per-account limits
+  and full refresh-session revocation after a successful reset
 - Database health endpoint
 - Debug-only backend connection entry in the Flutter app
 
@@ -168,13 +174,17 @@ lib/
 
 test/
 ├── models/         Flutter model tests
-├── services/       Backup parsing tests
-└── utils/          Authentication error-message tests
+├── services/       Backup parsing and API tests
+├── utils/          Authentication error-message tests
+└── widgets/        Authentication and page-flow widget tests
 
 backend/
 ├── integration/
 │   ├── auth_api.integration.test.js
 │   ├── email_verification.integration.test.js
+│   ├── password_reset.integration.test.js
+│   ├── password_reset_api.integration.test.js
+│   ├── password_reset_request.integration.test.js
 │   ├── refresh_token.integration.test.js
 │   ├── refresh_token_api.integration.test.js
 │   └── thought_api.integration.test.js
@@ -183,7 +193,8 @@ backend/
 │   ├── 002_create_thoughts.sql
 │   ├── 003_add_password_hash.sql
 │   ├── 004_add_email_verification.sql
-│   └── 005_add_refresh_tokens.sql
+│   ├── 005_add_refresh_tokens.sql
+│   └── 006_add_password_reset_tokens.sql
 ├── src/
 │   ├── auth_middleware.js
 │   ├── auth_token.js
@@ -192,6 +203,10 @@ backend/
 │   ├── email_verification.js
 │   ├── migrate.js
 │   ├── migration_runner.js
+│   ├── password_reset.js
+│   ├── password_reset_delivery.js
+│   ├── password_reset_mailer.js
+│   ├── password_reset_request.js
 │   ├── refresh_token.js
 │   ├── server.js
 │   ├── thought_validation.js
@@ -223,6 +238,8 @@ assets/
 | `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
 | `POST` | `/auth/email-verification/resend` | Request verification for the authenticated account; rate-limited requests return 429 |
 | `POST` | `/auth/email-verification/confirm` | Consume a verification token from the JSON body; invalid, expired or used tokens return 400 |
+| `POST` | `/auth/password-reset/request` | Accept a reset request with the same generic 202 response for registered, unknown and rate-limited valid emails |
+| `POST` | `/auth/password-reset/confirm` | Consume a reset token, replace the password and revoke refresh sessions; invalid, expired or used tokens return 400 |
 | `GET` | `/thoughts` | Fetch the authenticated user's server records |
 | `POST` | `/thoughts` | Create a record for the authenticated user |
 | `PATCH` | `/thoughts/:id` | Update a record owned by the authenticated user |
@@ -288,6 +305,17 @@ revocation could not be confirmed. Authentication forms disable their controls
 while a request is running and translate known API and network errors into
 Chinese user-facing messages.
 
+Password-reset requests deliberately return the same generic 202 response for
+registered, unknown and rate-limited valid email addresses. For an existing
+account, issuance is limited to one token per minute and five per rolling 24
+hours. Each token is a random 32-byte value, stored in PostgreSQL only as a
+SHA-256 hash, and expires after 60 minutes by default. Confirmation atomically
+consumes one token, stores the replacement password as a bcrypt hash, invalidates
+the account's remaining reset tokens and revokes all refresh sessions. A
+previously issued stateless access token can remain valid for the remainder of
+its 15-minute lifetime. The Flutter flow preserves local SQLite records and uses
+the local fake sender during development; no real reset email is sent.
+
 For the experimental server-record interface, `AuthTokenCoordinator` reads the
 secure token bundle before each Thought request, and `ApiService` sends the
 access token as `Authorization: Bearer <token>`. Logged-out requests are
@@ -328,16 +356,18 @@ DB_PASSWORD=your_postgresql_password
 JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=15m
 REFRESH_TOKEN_TTL_DAYS=30
+PASSWORD_RESET_TOKEN_TTL_MINUTES=60
 EMAIL_DELIVERY_MODE=disabled
 ```
 
 Secrets in `backend/.env` are ignored by Git.
 Email delivery is disabled by default. For local tests, set
 `EMAIL_DELIVERY_MODE=fake` in that ignored file. The fake sender keeps raw
-tokens in server memory for tests and sends no real email; it has no HTTP
-outbox. Registration still succeeds when delivery is disabled, while the
-authenticated resend endpoint returns 503. Resend accepts a bearer token;
-confirmation accepts JSON such as `{"token":"<64-character token>"}`.
+verification and password-reset tokens in server memory for tests and sends no
+real email; it has no HTTP outbox. Registration still succeeds when delivery is
+disabled, while verification resend and password-reset request return 503.
+Verification resend accepts a bearer token; both confirmation flows accept a
+64-character hexadecimal token in JSON.
 
 ### 3. Run PostgreSQL migrations
 
@@ -467,11 +497,15 @@ limits, fake delivery and failed-send cleanup. Temporary records and users
 created by the tests are removed afterward. Refresh-token coverage verifies
 hash-only storage, rotation with one absolute family expiry, concurrent refresh
 serialization, replay-triggered family revocation, explicit logout and the HTTP
-refresh flow.
+refresh flow. Password-reset coverage verifies generic request responses,
+per-account limits, failed-send cleanup, token expiry and single use, concurrent
+confirmation safety, password replacement and refresh-session revocation.
 
-Latest Day 41 client verification: `flutter analyze` and `flutter test` pass.
-Manual emulator testing also confirms logged-out rejection and authenticated
-server-record create, read, update and delete operations.
+Latest Day 66 verification passed 27 backend unit tests, 31 backend integration
+tests and 96 Flutter tests. Physical-device checks passed for the generic
+unknown-email response, successful reset, old-password rejection, new-password
+login, old-refresh-token rejection with 401, reset-token replay rejection and
+unchanged local data. `flutter analyze` was not run for Day 66.
 
 ### Docker development environment
 
@@ -531,6 +565,15 @@ discarded.
   absolute expiry and do not extend indefinitely when rotated.
 - PostgreSQL stores only SHA-256 refresh-token hashes. A replayed token revokes
   its complete family.
+- Password-reset requests use the same generic 202 response for registered,
+  unknown and rate-limited valid emails so the endpoint does not reveal account
+  existence.
+- PostgreSQL stores only SHA-256 password-reset token hashes. Tokens expire
+  after 60 minutes by default, are single-use and are limited to one per minute
+  and five per rolling 24 hours for each account.
+- A successful password reset invalidates sibling reset tokens and revokes every
+  refresh session for the account. Already issued stateless access tokens can
+  remain valid for at most the remainder of their 15-minute lifetime.
 - Flutter stores the access token, refresh token and refresh expiry with secure
   platform storage rather than SQLite or plain-text preferences.
 - Logging out revokes the server-side refresh-token family and deletes the
@@ -544,14 +587,14 @@ discarded.
 
 - Registration, login, JWT verification, current-user lookup and per-user
   Thought authorization are implemented for local learning and testing.
-- Password recovery and account deletion are not implemented. Account deletion
-  will need to remove server data and sessions without deleting local SQLite,
-  backups or original audio by default.
-- Email verification has backend registration, resend and confirmation plus a
-  Flutter verification page, but no real mail provider. The fake sender
-  delivers nothing externally.
-- Verification send limits are per account. Registration has no IP or global
-  send limit; those controls are needed before enabling a real mail provider.
+- Password recovery and reset are implemented for local learning with the fake
+  sender, but no real mail provider is configured. The fake sender delivers
+  nothing externally.
+- Account deletion is not implemented. It will need to remove server data and
+  sessions without deleting local SQLite, backups or original audio by default.
+- Email verification and password reset use per-account send limits.
+  Registration and recovery requests have no IP or global send limit; those
+  controls are needed before enabling a real mail provider.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -781,8 +824,21 @@ discarded.
   after testing with a temporary 10-second access-token lifetime; the local
   backend was restored to the normal 15-minute setting afterward.
   `flutter analyze` was not run.
-- [ ] Day 66: add password recovery and reset without revealing whether an email
-  exists, and revoke old sessions after a successful reset
+- [x] Day 66: added `006_add_password_reset_tokens.sql` and password recovery
+  without revealing whether a valid email belongs to an account. Random 32-byte
+  reset tokens are stored only as SHA-256 hashes, expire after 60 minutes by
+  default and are limited to one per minute and five per rolling 24 hours per
+  account. Confirmation is atomic and single-use: it writes a bcrypt password
+  hash, invalidates sibling reset tokens and revokes every refresh session under
+  a per-user lock. Flutter adds forgot-password navigation, a dedicated reset
+  page, generic privacy copy, validation and return-to-login handling while
+  leaving local data untouched. Local verification passed 27 backend unit
+  tests, 31 backend integration tests and 96 Flutter tests. Physical-device
+  checks passed for anonymous request feedback, successful reset, old-password
+  rejection, new-password login, old-refresh-token rejection with 401 and token
+  replay rejection. No real mail provider was added; an already issued access
+  token can remain valid for its remaining 15-minute lifetime, and
+  `flutter analyze` was not run.
 - [ ] Day 67: add account deletion for cloud accounts, server data and sessions
   without deleting local SQLite, backups or original audio by default
 - [ ] Day 68: harden the API

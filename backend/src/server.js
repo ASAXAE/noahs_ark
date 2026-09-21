@@ -20,11 +20,14 @@ const {
 const {
     validateRegistrationInput,
     validateLoginInput,
+    validatePasswordResetRequestInput,
+    validatePasswordResetConfirmationInput,
 } = require('./auth_validation');
 
 const {
     createFakeVerificationMailer,
 } = require('./verification_mailer');
+
 const {
     requestVerificationEmail,
 } = require('./verification_delivery');
@@ -37,6 +40,16 @@ const {
     revokeRefreshToken,
 } = require('./refresh_token');
 
+const {
+    createFakePasswordResetMailer,
+} = require('./password_reset_mailer');
+const {
+    requestPasswordResetEmail,
+} = require('./password_reset_delivery');
+const {
+    resetPasswordWithToken,
+} = require('./password_reset');
+
 const app = express();
 
 const port = process.env.PORT || 3000;
@@ -44,6 +57,11 @@ const port = process.env.PORT || 3000;
 const verificationMailer =
     process.env.EMAIL_DELIVERY_MODE === 'fake'
         ? createFakeVerificationMailer()
+        : null;
+
+const passwordResetMailer =
+    process.env.EMAIL_DELIVERY_MODE === 'fake'
+        ? createFakePasswordResetMailer()
         : null;
 
 app.use(express.json());
@@ -371,6 +389,101 @@ app.post(
             console.error('Failed to confirm email verification');
             return response.status(500).json({
                 message: 'Failed to confirm email verification',
+            });
+        }
+    },
+);
+
+app.post(
+    '/auth/password-reset/request',
+    async (request, response) => {
+        const validation =
+            validatePasswordResetRequestInput(
+                request.body,
+            );
+
+        if (validation.errors.length > 0) {
+            return response.status(400).json({
+                message: 'Invalid password reset request',
+                errors: validation.errors,
+            });
+        }
+
+        if (passwordResetMailer === null) {
+            return response.status(503).json({
+                message: 'Email delivery is not configured',
+            });
+        }
+
+        try {
+            await requestPasswordResetEmail(
+                pool,
+                validation.value.email,
+                passwordResetMailer,
+            );
+        } catch {
+            console.error(
+                'Failed to request password reset email',
+            );
+        }
+
+        return response.status(202).json({
+            message:
+                'If the email is registered, password reset instructions will be sent',
+        });
+    },
+);
+
+app.post(
+    '/auth/password-reset/confirm',
+    async (request, response) => {
+        const validation =
+            validatePasswordResetConfirmationInput(
+                request.body,
+            );
+
+        if (validation.errors.length > 0) {
+            return response.status(400).json({
+                message: 'Invalid password reset data',
+                errors: validation.errors,
+            });
+        }
+
+        const {
+            token,
+            password,
+        } = validation.value;
+
+        try {
+            const passwordHash = await bcrypt.hash(
+                password,
+                12,
+            );
+
+            const reset = await resetPasswordWithToken(
+                pool,
+                token,
+                passwordHash,
+            );
+
+            if (!reset) {
+                return response.status(400).json({
+                    message:
+                        'Invalid or expired password reset token',
+                });
+            }
+
+            return response.status(200).json({
+                reset: true,
+            });
+        } catch (error) {
+            console.error(
+                'Failed to reset password:',
+                error.message,
+            );
+
+            return response.status(500).json({
+                message: 'Failed to reset password',
             });
         }
     },

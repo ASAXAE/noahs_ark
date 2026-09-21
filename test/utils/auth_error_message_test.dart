@@ -100,4 +100,52 @@ void main() {
       '退出登录失败，请稍后重试',
     );
   });
+
+  test('translates an invalid password reset token', () {
+    expect(
+      authErrorMessage(
+        const ApiException(
+          statusCode: 400,
+          message: 'Invalid or expired password reset token',
+        ),
+      ),
+      '重置令牌无效、已过期或已经使用',
+    );
+  });
+
+  test('translates invalid password reset data', () {
+    expect(
+      authErrorMessage(
+        const ApiException(
+          statusCode: 400,
+          message: 'Invalid password reset data',
+        ),
+      ),
+      '密码重置信息不符合要求，请检查后重试',
+    );
+  });
+
+  test('translates password reset request failures', () {
+    expect(
+      authErrorMessage(
+        const ApiException(
+          statusCode: 500,
+          message: 'Password reset request failed',
+        ),
+      ),
+      '无法申请密码重置，请稍后重试',
+    );
+  });
+
+  test('translates password reset failures', () {
+    expect(
+      authErrorMessage(
+        const ApiException(
+          statusCode: 500,
+          message: 'Failed to reset password',
+        ),
+      ),
+      '密码重置失败，请稍后重试',
+    );
+  });
 }

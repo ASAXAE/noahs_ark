@@ -379,4 +379,72 @@ class ApiService {
       throw const FormatException('Email verification response is invalid');
     }
   }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    final normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail.isEmpty) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Invalid password reset request',
+      );
+    }
+
+    final uri = Uri.parse('$_localBaseUrl/auth/password-reset/request');
+
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'email': normalizedEmail}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 202) {
+      final message =
+          json['message'] as String? ?? 'Password reset request failed';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
+    }
+  }
+
+  Future<void> confirmPasswordReset({
+    required String token,
+    required String password,
+  }) async {
+    final normalizedToken = token.trim().toLowerCase();
+
+    if (normalizedToken.isEmpty || password.isEmpty) {
+      throw const ApiException(
+        statusCode: 400,
+        message: 'Invalid password reset data',
+      );
+    }
+
+    final uri = Uri.parse('$_localBaseUrl/auth/password-reset/confirm');
+
+    final response = await _httpClient
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json; charset=UTF-8'},
+          body: jsonEncode({'token': normalizedToken, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    final json =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (response.statusCode != 200) {
+      final message = json['message'] as String? ?? 'Failed to reset password';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
+    }
+
+    if (json['reset'] != true) {
+      throw const FormatException('Password reset response is invalid');
+    }
+  }
 }

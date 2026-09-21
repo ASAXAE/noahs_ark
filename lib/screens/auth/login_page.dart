@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_session_storage.dart';
 import '../../utils/auth_error_message.dart';
 import 'register_page.dart';
+import 'password_reset_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -86,6 +87,25 @@ class _LoginPageState extends State<LoginPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('账户创建成功，请使用新账户登录')));
+  }
+
+  Future<void> _openPasswordResetPage() async {
+    final resetCompleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => PasswordResetPage(initialEmail: _emailController.text),
+      ),
+    );
+
+    if (!mounted || resetCompleted != true) {
+      return;
+    }
+
+    _passwordController.clear();
+    _passwordFocusNode.requestFocus();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('密码已重置，请使用新密码登录')));
   }
 
   @override
@@ -196,6 +216,7 @@ class _LoginPageState extends State<LoginPage> {
                 _fieldLabel('邮箱'),
                 const SizedBox(height: 6),
                 TextFormField(
+                  key: const Key('login-email'),
                   controller: _emailController,
                   enabled: !_isSubmitting,
                   keyboardType: TextInputType.emailAddress,
@@ -224,6 +245,7 @@ class _LoginPageState extends State<LoginPage> {
                 _fieldLabel('密码'),
                 const SizedBox(height: 6),
                 TextFormField(
+                  key: const Key('login-password'),
                   controller: _passwordController,
                   focusNode: _passwordFocusNode,
                   enabled: !_isSubmitting,
@@ -262,7 +284,16 @@ class _LoginPageState extends State<LoginPage> {
                     }
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('open-password-reset'),
+                    onPressed: _isSubmitting ? null : _openPasswordResetPage,
+                    child: const Text('忘记密码？'),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 SizedBox(
                   height: 52,
                   child: FilledButton(

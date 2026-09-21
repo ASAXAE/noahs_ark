@@ -37,6 +37,11 @@ String authErrorMessage(Object error) {
     'verification email is temporarily unavailable': '验证邮件暂时无法发送，请稍后重试',
     'invalid or expired verification token': '验证令牌无效、已过期或已经使用',
     'failed to confirm email verification': '确认邮箱验证失败，请稍后重试',
+    'invalid password reset request': '密码重置申请信息不完整，请检查后重试',
+    'password reset request failed': '无法申请密码重置，请稍后重试',
+    'invalid password reset data': '密码重置信息不符合要求，请检查后重试',
+    'invalid or expired password reset token': '重置令牌无效、已过期或已经使用',
+    'failed to reset password': '密码重置失败，请稍后重试',
   };
 
   final translatedMessage = translatedMessages[normalizedMessage];

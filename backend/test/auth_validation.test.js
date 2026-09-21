@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const {
     validateRegistrationInput,
     validateLoginInput,
+    validatePasswordResetRequestInput,
+    validatePasswordResetConfirmationInput,
 } = require('../src/auth_validation');
 
 describe('validateRegistrationInput', () => {
@@ -135,5 +137,73 @@ describe('validateLoginInput', () => {
         });
 
         assert.deepEqual(result.errors, []);
+    });
+});
+
+describe('validatePasswordResetRequestInput', () => {
+    test('accepts and normalizes a valid email', () => {
+        const result = validatePasswordResetRequestInput({
+            email: '  TEST@EXAMPLE.COM  ',
+        });
+
+        assert.deepEqual(result, {
+            errors: [],
+            value: {
+                email: 'test@example.com',
+            },
+        });
+    });
+
+    test('rejects an invalid email', () => {
+        const result = validatePasswordResetRequestInput({
+            email: 'invalid-email',
+        });
+
+        assert.deepEqual(result.errors, [
+            'email is invalid',
+        ]);
+    });
+});
+
+describe('validatePasswordResetConfirmationInput', () => {
+    test('accepts a valid token and password', () => {
+        const result =
+            validatePasswordResetConfirmationInput({
+                token: 'A'.repeat(64),
+                password: 'Replacement123',
+            });
+
+        assert.deepEqual(result, {
+            errors: [],
+            value: {
+                token: 'a'.repeat(64),
+                password: 'Replacement123',
+            },
+        });
+    });
+
+    test('rejects an invalid token and short password', () => {
+        const result =
+            validatePasswordResetConfirmationInput({
+                token: 'invalid-token',
+                password: 'short',
+            });
+
+        assert.deepEqual(result.errors, [
+            'token is invalid',
+            'password must contain at least 8 characters',
+        ]);
+    });
+
+    test('rejects a password without a number', () => {
+        const result =
+            validatePasswordResetConfirmationInput({
+                token: 'a'.repeat(64),
+                password: 'PasswordOnly',
+            });
+
+        assert.deepEqual(result.errors, [
+            'password must contain at least one letter and one number',
+        ]);
     });
 });
