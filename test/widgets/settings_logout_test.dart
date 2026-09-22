@@ -8,12 +8,16 @@ import 'package:noahs_ark_app/services/api_service.dart';
 import 'package:noahs_ark_app/services/auth_session_storage.dart';
 
 class FakeApiService extends ApiService {
-  FakeApiService({this.logoutError});
+  FakeApiService({this.logoutError, this.deletionError});
 
   final Object? logoutError;
+  final Object? deletionError;
 
   int logoutCallCount = 0;
   String? receivedRefreshToken;
+
+  int deletionCallCount = 0;
+  String? submittedDeletionPassword;
 
   @override
   Future<void> logout({required String refreshToken}) async {
@@ -21,6 +25,18 @@ class FakeApiService extends ApiService {
     receivedRefreshToken = refreshToken;
 
     final error = logoutError;
+
+    if (error != null) {
+      throw error;
+    }
+  }
+
+  @override
+  Future<void> deleteAccount({required String password}) async {
+    deletionCallCount++;
+    submittedDeletionPassword = password;
+
+    final error = deletionError;
 
     if (error != null) {
       throw error;
@@ -152,6 +168,83 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(apiService.logoutCallCount, 0);
+    expect(storage.deleteCallCount, 0);
+    expect(notifier.value, same(session));
+  });
+
+  testWidgets(
+    'account deletion clears local auth state but retains local content',
+    (tester) async {
+      final notifier = ValueNotifier<AuthSession?>(createSession());
+
+      addTearDown(notifier.dispose);
+
+      final apiService = FakeApiService();
+      final storage = FakeAuthSessionStorage();
+
+      await pumpSettings(
+        tester,
+        notifier: notifier,
+        apiService: apiService,
+        storage: storage,
+      );
+
+      final entry = find.byKey(const ValueKey('account-deletion-entry'));
+
+      await tester.ensureVisible(entry);
+      await tester.tap(entry);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const Key('account-deletion-password')),
+        'CurrentPassword123',
+      );
+
+      final button = find.byKey(const Key('account-deletion-button'));
+
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(apiService.deletionCallCount, 1);
+
+      expect(apiService.submittedDeletionPassword, 'CurrentPassword123');
+
+      expect(storage.deleteCallCount, 1);
+      expect(notifier.value, isNull);
+
+      expect(find.text('云端账号已删除，本地记录、闪念和录音仍然保留'), findsOneWidget);
+    },
+  );
+
+  testWidgets('leaving the deletion page changes nothing', (tester) async {
+    final session = createSession();
+
+    final notifier = ValueNotifier<AuthSession?>(session);
+
+    addTearDown(notifier.dispose);
+
+    final apiService = FakeApiService();
+    final storage = FakeAuthSessionStorage();
+
+    await pumpSettings(
+      tester,
+      notifier: notifier,
+      apiService: apiService,
+      storage: storage,
+    );
+
+    final entry = find.byKey(const ValueKey('account-deletion-entry'));
+
+    await tester.ensureVisible(entry);
+    await tester.tap(entry);
+    await tester.pumpAndSettle();
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(apiService.deletionCallCount, 0);
+
     expect(storage.deleteCallCount, 0);
     expect(notifier.value, same(session));
   });

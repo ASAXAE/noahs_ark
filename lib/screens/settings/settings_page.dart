@@ -9,6 +9,7 @@ import '../../services/api_service.dart';
 import '../auth/login_page.dart';
 import 'email_verification_page.dart';
 import 'local_first_info_page.dart';
+import 'account_deletion_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({
@@ -155,6 +156,43 @@ class SettingsPage extends StatelessWidget {
         ScaffoldMessenger.of(context).hideCurrentMaterialBanner();
       }
     });
+  }
+
+  Future<void> _openAccountDeletion(BuildContext context) async {
+    final deleted = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => AccountDeletionPage(apiService: apiService),
+      ),
+    );
+
+    if (deleted != true) {
+      return;
+    }
+
+    var localTokensCleared = true;
+
+    try {
+      await (authSessionStorage ?? AuthSessionStorage.instance).deleteTokens();
+    } catch (_) {
+      localTokensCleared = false;
+    }
+
+    // 云端账号已经删除，即使安全存储清理失败，
+    // 也不能继续保留有效的内存登录状态。
+    authSessionNotifier.value = null;
+
+    if (!context.mounted) {
+      return;
+    }
+
+    final message = localTokensCleared
+        ? '云端账号已删除，本地记录、闪念和录音仍然保留'
+        : '云端账号已删除，但本地登录信息未能清除；'
+              '本地记录仍然保留';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(behavior: SnackBarBehavior.floating, content: Text(message)),
+    );
   }
 
   Future<void> _confirmLogout(BuildContext context) async {
@@ -373,6 +411,24 @@ class SettingsPage extends StatelessWidget {
                       subtitle: const Text('退出不会删除本地记录'),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => _confirmLogout(context),
+                    ),
+
+                    const Divider(height: 1),
+                    ListTile(
+                      key: const ValueKey('account-deletion-entry'),
+                      leading: Icon(
+                        Icons.delete_forever_outlined,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      title: Text(
+                        '删除云端账号',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      subtitle: const Text('永久删除服务器账号；本地内容保留'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openAccountDeletion(context),
                     ),
                   ],
                 ),

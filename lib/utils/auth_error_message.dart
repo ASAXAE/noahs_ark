@@ -42,6 +42,9 @@ String authErrorMessage(Object error) {
     'invalid password reset data': '密码重置信息不符合要求，请检查后重试',
     'invalid or expired password reset token': '重置令牌无效、已过期或已经使用',
     'failed to reset password': '密码重置失败，请稍后重试',
+    'invalid account deletion data': '删除账号信息不完整，请检查后重试',
+    'current password is incorrect': '当前密码不正确，云端账号未删除',
+    'failed to delete account': '删除云端账号失败，请稍后重试',
   };
 
   final translatedMessage = translatedMessages[normalizedMessage];

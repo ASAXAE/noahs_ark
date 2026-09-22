@@ -6,6 +6,7 @@ const {
     validateLoginInput,
     validatePasswordResetRequestInput,
     validatePasswordResetConfirmationInput,
+    validateAccountDeletionInput,
 } = require('../src/auth_validation');
 
 describe('validateRegistrationInput', () => {
@@ -204,6 +205,39 @@ describe('validatePasswordResetConfirmationInput', () => {
 
         assert.deepEqual(result.errors, [
             'password must contain at least one letter and one number',
+        ]);
+    });
+});
+
+describe('validateAccountDeletionInput', () => {
+    test('accepts a non-empty current password without applying new-password rules', () => {
+        const result = validateAccountDeletionInput({
+            password: 'current password',
+        });
+
+        assert.deepEqual(result, {
+            errors: [],
+            value: {
+                password: 'current password',
+            },
+        });
+    });
+
+    test('rejects a missing password', () => {
+        const result = validateAccountDeletionInput({});
+
+        assert.deepEqual(result.errors, [
+            'password is required',
+        ]);
+    });
+
+    test('rejects a password longer than 72 characters', () => {
+        const result = validateAccountDeletionInput({
+            password: 'a'.repeat(73),
+        });
+
+        assert.deepEqual(result.errors, [
+            'password must not exceed 72 characters',
         ]);
     });
 });

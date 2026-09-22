@@ -45,6 +45,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
   retry of the rejected protected request
 - Account status card, top-of-page login confirmation and logout confirmation
   that explains local records remain on the device
+- Authenticated account deletion with current-password confirmation, explicit
+  server/local-data boundaries and local-data retention after deletion
 - Forgot-password navigation and a dedicated reset page with a prefilled email,
   privacy-preserving request feedback, token/password validation and a focused
   return to login after a successful reset
@@ -236,6 +238,7 @@ assets/
 | `POST` | `/auth/token/refresh` | Rotate a valid refresh token and issue a replacement token pair |
 | `POST` | `/auth/logout` | Revoke the refresh-token family; successful logout returns 204 |
 | `GET` | `/auth/me` | Return the authenticated user for a valid bearer token |
+| `DELETE` | `/auth/account` | Verify the current password, then delete the authenticated account and its server data; success returns 204 |
 | `POST` | `/auth/email-verification/resend` | Request verification for the authenticated account; rate-limited requests return 429 |
 | `POST` | `/auth/email-verification/confirm` | Consume a verification token from the JSON body; invalid, expired or used tokens return 400 |
 | `POST` | `/auth/password-reset/request` | Accept a reset request with the same generic 202 response for registered, unknown and rate-limited valid emails |
@@ -304,6 +307,14 @@ be reached, Flutter still clears the local session and reports that remote
 revocation could not be confirmed. Authentication forms disable their controls
 while a request is running and translate known API and network errors into
 Chinese user-facing messages.
+
+Account deletion is a separate authenticated operation that requires the
+current password. Express locks the user row, verifies its bcrypt hash and
+deletes the account in one transaction. Existing foreign-key cascades remove
+the account's server Thoughts, verification/reset tokens and refresh sessions.
+After a 204 response, Flutter clears the secure token bundle and in-memory
+session while deliberately retaining local SQLite records, exported backups
+and original Flash Thought audio.
 
 Password-reset requests deliberately return the same generic 202 response for
 registered, unknown and rate-limited valid email addresses. For an existing
@@ -501,11 +512,18 @@ refresh flow. Password-reset coverage verifies generic request responses,
 per-account limits, failed-send cleanup, token expiry and single use, concurrent
 confirmation safety, password replacement and refresh-session revocation.
 
-Latest Day 66 verification passed 27 backend unit tests, 31 backend integration
+Day 66 verification passed 27 backend unit tests, 31 backend integration
 tests and 96 Flutter tests. Physical-device checks passed for the generic
 unknown-email response, successful reset, old-password rejection, new-password
 login, old-refresh-token rejection with 401, reset-token replay rejection and
 unchanged local data. `flutter analyze` was not run for Day 66.
+
+Latest Day 67 verification passed 30 backend unit tests, 34 backend integration
+tests and 104 Flutter tests. Physical-device checks passed for cancellation,
+wrong-password protection, successful deletion, rejection of the deleted
+account's credentials and retention of the local SQLite Thought, original
+Flash Thought recording and exported JSON backup across an app restart.
+`flutter analyze` was not run for Day 67.
 
 ### Docker development environment
 
@@ -578,8 +596,14 @@ discarded.
   platform storage rather than SQLite or plain-text preferences.
 - Logging out revokes the server-side refresh-token family and deletes the
   local token bundle without deleting journal records.
-- Production cloud sync will still require HTTPS, account deletion, secure
-  secret management, deployment hardening and a privacy policy.
+- Account deletion requires the current password and transactionally deletes
+  the account plus its server Thoughts, verification/reset tokens and refresh
+  sessions through foreign-key cascades.
+- Successful account deletion clears Flutter's secure token bundle and
+  in-memory session without deleting local SQLite, exported backups or original
+  audio.
+- Production cloud sync will still require HTTPS, secure secret management,
+  deployment hardening and a privacy policy.
 - An administration interface must not expose private journal content by
   default.
 
@@ -590,8 +614,8 @@ discarded.
 - Password recovery and reset are implemented for local learning with the fake
   sender, but no real mail provider is configured. The fake sender delivers
   nothing externally.
-- Account deletion is not implemented. It will need to remove server data and
-  sessions without deleting local SQLite, backups or original audio by default.
+- Account deletion is implemented for local learning and testing, but there is
+  no deployed deletion-request web flow or production retention-policy process.
 - Email verification and password reset use per-account send limits.
   Registration and recovery requests have no IP or global send limit; those
   controls are needed before enabling a real mail provider.
@@ -839,8 +863,18 @@ discarded.
   replay rejection. No real mail provider was added; an already issued access
   token can remain valid for its remaining 15-minute lifetime, and
   `flutter analyze` was not run.
-- [ ] Day 67: add account deletion for cloud accounts, server data and sessions
-  without deleting local SQLite, backups or original audio by default
+- [x] Day 67: added authenticated account deletion with current-password
+  confirmation and a transactional user-row lock. Deleting the user relies on
+  existing foreign-key cascades to remove server Thoughts, verification/reset
+  tokens and refresh sessions. Flutter adds a signed-in-only settings entry,
+  an explicit warning and password confirmation, preserves the DELETE body
+  across one automatic refresh retry, then clears the secure token bundle and
+  in-memory session after success. Local SQLite, exported backups and original
+  Flash Thought audio remain untouched. Verification passed 30 backend unit
+  tests, 34 backend integration tests and 104 Flutter tests. Physical-device
+  checks passed for cancellation, wrong-password protection, deletion,
+  rejected old credentials and retained local data/audio/backup across restart.
+  `flutter analyze` was not run.
 - [ ] Day 68: harden the API
 - [ ] Day 69: prepare staging; cloud platform, resources and costs require explicit
   approval

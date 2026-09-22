@@ -22,6 +22,7 @@ const {
     validateLoginInput,
     validatePasswordResetRequestInput,
     validatePasswordResetConfirmationInput,
+    validateAccountDeletionInput,
 } = require('./auth_validation');
 
 const {
@@ -49,6 +50,9 @@ const {
 const {
     resetPasswordWithToken,
 } = require('./password_reset');
+const {
+    deleteAccountWithPassword,
+} = require('./account_deletion');
 
 const app = express();
 
@@ -325,6 +329,49 @@ app.get(
             return response.status(500).json({
                 message:
                     'Failed to fetch authenticated user',
+            });
+        }
+    },
+);
+
+app.delete(
+    '/auth/account',
+    requireAuthentication,
+    async (request, response) => {
+        const validation = validateAccountDeletionInput(
+            request.body,
+        );
+
+        if (validation.errors.length > 0) {
+            return response.status(400).json({
+                message: 'Invalid account deletion data',
+                errors: validation.errors,
+            });
+        }
+
+        try {
+            const deleted =
+                await deleteAccountWithPassword(
+                    pool,
+                    request.auth.userId,
+                    validation.value.password,
+                );
+
+            if (!deleted) {
+                return response.status(403).json({
+                    message: 'Current password is incorrect',
+                });
+            }
+
+            return response.status(204).send();
+        } catch (error) {
+            console.error(
+                'Failed to delete account:',
+                error.message,
+            );
+
+            return response.status(500).json({
+                message: 'Failed to delete account',
             });
         }
     },

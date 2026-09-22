@@ -67,7 +67,7 @@ class ApiService {
         case 'PATCH':
           request = _httpClient.patch(uri, headers: headers, body: body);
         case 'DELETE':
-          request = _httpClient.delete(uri, headers: headers);
+          request = _httpClient.delete(uri, headers: headers, body: body);
         default:
           throw ArgumentError.value(
             method,
@@ -307,6 +307,26 @@ class ApiService {
         statusCode: response.statusCode,
         message: 'Failed to log out',
       );
+    }
+  }
+
+  Future<void> deleteAccount({required String password}) async {
+    final uri = Uri.parse('$_localBaseUrl/auth/account');
+
+    final response = await _sendAuthenticated(
+      method: 'DELETE',
+      uri: uri,
+      body: jsonEncode({'password': password}),
+      includeJsonContentType: true,
+    );
+
+    if (response.statusCode != 204) {
+      final json =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+      final message = json['message'] as String? ?? 'Failed to delete account';
+
+      throw ApiException(statusCode: response.statusCode, message: message);
     }
   }
 

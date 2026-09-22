@@ -189,9 +189,39 @@ function validatePasswordResetConfirmationInput(body = {}) {
     };
 }
 
+function validateAccountDeletionInput(body = {}) {
+    const input =
+        body !== null && typeof body === 'object'
+            ? body
+            : {};
+
+    const password =
+        typeof input.password === 'string'
+            ? input.password
+            : '';
+
+    const errors = [];
+
+    if (password.length === 0) {
+        errors.push('password is required');
+    }
+
+    if (password.length > 72) {
+        errors.push('password must not exceed 72 characters');
+    }
+
+    return {
+        errors,
+        value: {
+            password,
+        },
+    };
+}
+
 module.exports = {
     validateRegistrationInput,
     validateLoginInput,
     validatePasswordResetRequestInput,
     validatePasswordResetConfirmationInput,
+    validateAccountDeletionInput,
 };
