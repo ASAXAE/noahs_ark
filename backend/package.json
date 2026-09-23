@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "db:migrate": "node src/migrate.js",
-    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js",
+    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js test/api_hardening.test.js",
     "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js integration/email_verification.integration.test.js integration/refresh_token.integration.test.js integration/refresh_token_api.integration.test.js integration/password_reset.integration.test.js integration/password_reset_request.integration.test.js integration/password_reset_api.integration.test.js integration/account_deletion.integration.test.js integration/account_deletion_api.integration.test.js"
   },
   "keywords": [],
@@ -16,6 +16,8 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0"
   }

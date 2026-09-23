@@ -518,12 +518,14 @@ unknown-email response, successful reset, old-password rejection, new-password
 login, old-refresh-token rejection with 401, reset-token replay rejection and
 unchanged local data. `flutter analyze` was not run for Day 66.
 
-Latest Day 67 verification passed 30 backend unit tests, 34 backend integration
-tests and 104 Flutter tests. Physical-device checks passed for cancellation,
-wrong-password protection, successful deletion, rejection of the deleted
-account's credentials and retention of the local SQLite Thought, original
-Flash Thought recording and exported JSON backup across an app restart.
-`flutter analyze` was not run for Day 67.
+Latest Day 68 verification passed 35 backend tests, including five isolated
+HTTP hardening checks, and all 34 backend integration tests. Manual HTTP checks
+confirmed the security headers, JSON 404 response, malformed-body 400 response,
+oversized-body 413 response and a 429 response with standard `RateLimit`,
+`RateLimit-Policy` and `Retry-After` headers after the sensitive-auth quota was
+exhausted. The `noahs-ark-api:day68` Docker image also built successfully from
+the updated lock file. No Flutter source changed, so Flutter tests and
+`flutter analyze` were not run for Day 68.
 
 ### Docker development environment
 
@@ -602,6 +604,15 @@ discarded.
 - Successful account deletion clears Flutter's secure token bundle and
   in-memory session without deleting local SQLite, exported backups or original
   audio.
+- Helmet adds API-oriented security response headers and removes
+  `X-Powered-By`. Content Security Policy remains disabled because the service
+  returns JSON rather than web pages, and HSTS remains disabled until HTTPS is
+  configured and verified.
+- JSON request bodies are limited to 32 KB. Malformed JSON, oversized bodies
+  and unknown routes receive stable JSON 400, 413 and 404 responses.
+- Sensitive authentication routes allow 40 requests per IP per 15 minutes;
+  refresh and logout routes have a separate 120-request session-token quota.
+  Rejections use 429 plus standard rate-limit and retry headers.
 - Production cloud sync will still require HTTPS, secure secret management,
   deployment hardening and a privacy policy.
 - An administration interface must not expose private journal content by
@@ -616,9 +627,12 @@ discarded.
   nothing externally.
 - Account deletion is implemented for local learning and testing, but there is
   no deployed deletion-request web flow or production retention-policy process.
-- Email verification and password reset use per-account send limits.
-  Registration and recovery requests have no IP or global send limit; those
-  controls are needed before enabling a real mail provider.
+- Email verification and password reset retain their database-backed
+  per-account send limits. Day 68 adds process-local, in-memory IP limits around
+  registration, login, account deletion, verification, recovery and session
+  token routes. These counters reset when Express restarts and are not shared
+  across multiple API instances. Proxy trust and a distributed limiter must be
+  decided from the actual staging topology before production use.
 - Server records are shown in an experimental test interface.
 - The backend is intended for local development and is not deployed.
 - Local SQLite records and PostgreSQL test records are not synchronized.
@@ -875,7 +889,19 @@ discarded.
   checks passed for cancellation, wrong-password protection, deletion,
   rejected old credentials and retained local data/audio/backup across restart.
   `flutter analyze` was not run.
-- [ ] Day 68: harden the API
+- [x] Day 68: hardened the Express API with Helmet security headers, removal of
+  `X-Powered-By`, a 32 KB JSON-body limit and stable JSON responses for unknown
+  routes, malformed JSON and oversized bodies. Added separate in-memory IP
+  quotas for sensitive authentication routes (40 per 15 minutes) and refresh or
+  logout routes (120 per 15 minutes), using standard rate-limit headers without
+  legacy `X-RateLimit-*` headers. Exported the Express app without changing the
+  normal `node src/server.js` startup path so isolated HTTP tests can use a
+  random local port. Verification passed all 35 backend tests and 34 backend
+  integration tests; manual checks covered headers and 400/404/413/429
+  responses, and the `noahs-ark-api:day68` Docker image built successfully.
+  CSP remains disabled for the JSON-only API, while HSTS, proxy trust and any
+  shared rate-limit store remain staging/HTTPS decisions for Days 69–70. No
+  Flutter source changed, and `flutter analyze` was not run.
 - [ ] Day 69: prepare staging; cloud platform, resources and costs require explicit
   approval
 - [ ] Day 70: verify HTTPS, database TLS, environment isolation and secret rotation

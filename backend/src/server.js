@@ -1,4 +1,9 @@
 const express = require('express');
+const helmet = require('helmet');
+const {
+    rateLimit,
+} = require('express-rate-limit');
+
 const bcrypt = require('bcryptjs');
 
 require('dotenv').config();
@@ -68,7 +73,63 @@ const passwordResetMailer =
         ? createFakePasswordResetMailer()
         : null;
 
-app.use(express.json());
+const sensitiveAuthLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 40,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    identifier: 'sensitive-auth',
+    message: {
+        message:
+            'Too many authentication requests; try again later',
+    },
+});
+
+const sessionTokenLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    identifier: 'session-token',
+    message: {
+        message:
+            'Too many session requests; try again later',
+    },
+});
+
+app.use(
+    helmet({
+        contentSecurityPolicy: false,
+        strictTransportSecurity: false,
+    }),
+);
+
+app.use(
+    [
+        '/auth/register',
+        '/auth/login',
+        '/auth/account',
+        '/auth/email-verification/resend',
+        '/auth/email-verification/confirm',
+        '/auth/password-reset/request',
+        '/auth/password-reset/confirm',
+    ],
+    sensitiveAuthLimiter,
+);
+
+app.use(
+    [
+        '/auth/token/refresh',
+        '/auth/logout',
+    ],
+    sessionTokenLimiter,
+);
+
+app.use(
+    express.json({
+        limit: '32kb',
+    }),
+);
 
 app.get('/health', (request, response) => {
     response.json({
@@ -773,8 +834,45 @@ app.delete(
     },
 );
 
-app.listen(port, '0.0.0.0', () => {
-    console.log(
-        `Noah's Ark API is running on http://localhost:${port}`,
-    );
+app.use((request, response) => {
+    return response.status(404).json({
+        message: 'Route not found',
+    });
 });
+
+app.use((error, request, response, next) => {
+    if (response.headersSent) {
+        return next(error);
+    }
+
+    if (error.type === 'entity.parse.failed') {
+        return response.status(400).json({
+            message: 'Invalid JSON body',
+        });
+    }
+
+    if (error.type === 'entity.too.large') {
+        return response.status(413).json({
+            message: 'Request body is too large',
+        });
+    }
+
+    console.error(
+        'Unhandled request error:',
+        error.message,
+    );
+
+    return response.status(500).json({
+        message: 'Internal server error',
+    });
+});
+
+if (require.main === module) {
+    app.listen(port, '0.0.0.0', () => {
+        console.log(
+            `Noah's Ark API is running on http://localhost:${port}`,
+        );
+    });
+}
+
+module.exports = app;
