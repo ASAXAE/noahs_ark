@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 
 RUN npm ci --omit=dev
 
+COPY sql ./sql
 COPY src ./src
 
 EXPOSE 3000

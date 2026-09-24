@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: noahs-ark-api-staging
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: '/bin/sh -c "node src/migrate.js && node src/server.js"'
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: noahs-ark-staging-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: noahs-ark-staging-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: noahs-ark-staging-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: noahs-ark-staging-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: noahs-ark-staging-db
+          property: password
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: "30"
+      - key: PASSWORD_RESET_TOKEN_TTL_MINUTES
+        value: "60"
+      - key: EMAIL_DELIVERY_MODE
+        value: disabled
+
+databases:
+  - name: noahs-ark-staging-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: "17"
+    databaseName: noahs_ark_staging
+    user: noahs_ark_staging_user
+    connectionPool: none
+    ipAllowList: [ ]
