@@ -902,8 +902,10 @@ discarded.
   CSP remains disabled for the JSON-only API, while HSTS, proxy trust and any
   shared rate-limit store remain staging/HTTPS decisions for Days 69–70. No
   Flutter source changed, and `flutter analyze` was not run.
-- [ ] Day 69: prepare staging; cloud platform, resources and costs require explicit
-  approval
+- [x] Day 69: deployed the experimental Express API and PostgreSQL database to
+  Railway staging in Singapore; migrations, health endpoints and the disposable
+  authentication lifecycle were verified. See
+  `docs/product_decisions/002_staging.md`.
 - [ ] Day 70: verify HTTPS, database TLS, environment isolation and secret rotation
 - [ ] Day 71: productionize health checks, request IDs, error monitoring and
   privacy-safe logging
