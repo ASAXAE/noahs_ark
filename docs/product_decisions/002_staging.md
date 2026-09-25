@@ -73,10 +73,48 @@ Verified on 2026-09-25.
 - [x] Local SQLite records and Flash Thought audio remain local.
 - [x] Resource names, region and estimated usage are recorded.
 
-## Deferred to Day 70
+## Day 70 acceptance criteria
 
-- HTTPS verification
-- PostgreSQL TLS enforcement
-- environment isolation
-- secret rotation
-- HSTS and proxy-trust decisions
+Verified on 2026-09-25.
+
+- [x] The public `/health` endpoint returns 200 over verified HTTPS.
+- [x] Staging responses include
+  `Strict-Transport-Security: max-age=31536000` without subdomain or preload
+  directives.
+- [x] `DB_SSL_MODE=require` enforces an encrypted PostgreSQL connection, and
+  `/database-health` reports `tlsEnabled: true` from `pg_stat_ssl`.
+- [x] PostgreSQL remains reachable only through Railway private networking;
+  no public TCP proxy is enabled.
+- [x] The Railway project contains only the `staging` environment. No
+  production environment, production service, production variables or
+  production data exist.
+- [x] The staging JWT signing secret was replaced with a newly generated random
+  value without being committed or exposed in logs.
+- [x] The PostgreSQL password was regenerated through Railway's database
+  configuration, and the API was redeployed to resolve the updated password
+  reference.
+- [x] Registration, login, authenticated `/auth/me`, account deletion and
+  deleted-account rejection succeeded after both credential rotations.
+- [x] The disposable verification account was deleted; the staging `users`
+  table is empty.
+- [x] GitHub Actions run 26 passed backend unit tests, PostgreSQL integration,
+  backend Docker build and Flutter checks for commit `b4b399d`.
+
+## Day 70 security decisions and limits
+
+- HSTS is controlled by `ENABLE_HSTS` so local HTTP development remains
+  available while verified staging HTTPS opts in explicitly.
+- Railway PostgreSQL uses a self-signed certificate. The staging client
+  requires encryption with `rejectUnauthorized: false`; server-certificate
+  identity is therefore not independently verified. The database remains
+  behind Railway's isolated, encrypted private network with no public TCP
+  exposure.
+- Express `trust proxy` remains disabled. Railway documents `X-Real-IP` for the
+  client address, while Express proxy trust is based on a topology-specific
+  trust contract. The current process-local rate limiters remain staging
+  controls and are not production-grade distributed limits.
+- Rotating `JWT_SECRET` invalidates previously issued access tokens, whose
+  configured maximum lifetime is 15 minutes. Refresh tokens can obtain access
+  tokens signed with the replacement secret.
+- Database-password rotation can briefly interrupt staging until the dependent
+  API service is redeployed.

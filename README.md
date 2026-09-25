@@ -359,11 +359,13 @@ Create `backend/.env` from `backend/.env.example`:
 
 ```env
 PORT=3000
+ENABLE_HSTS=false
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=noahs_ark
 DB_USER=postgres
 DB_PASSWORD=your_postgresql_password
+DB_SSL_MODE=disable
 JWT_SECRET=replace_with_a_long_random_secret
 JWT_EXPIRES_IN=15m
 REFRESH_TOKEN_TTL_DAYS=30
@@ -372,6 +374,9 @@ EMAIL_DELIVERY_MODE=disabled
 ```
 
 Secrets in `backend/.env` are ignored by Git.
+Local HTTP and PostgreSQL connections keep HSTS and database TLS disabled by
+default. Railway staging sets `ENABLE_HSTS=true` and `DB_SSL_MODE=require`
+after verifying its public HTTPS endpoint and private PostgreSQL topology.
 Email delivery is disabled by default. For local tests, set
 `EMAIL_DELIVERY_MODE=fake` in that ignored file. The fake sender keeps raw
 verification and password-reset tokens in server memory for tests and sends no
@@ -527,6 +532,18 @@ exhausted. The `noahs-ark-api:day68` Docker image also built successfully from
 the updated lock file. No Flutter source changed, so Flutter tests and
 `flutter analyze` were not run for Day 68.
 
+Day 70 verification passed 39 backend unit tests and all 34 backend integration
+tests locally. GitHub Actions run 26 passed backend unit tests, PostgreSQL
+integration, the backend Docker build and Flutter checks for commit `b4b399d`.
+Railway staging returned 200 over HTTPS with
+`Strict-Transport-Security: max-age=31536000`, while `/database-health`
+reported `tlsEnabled: true` from `pg_stat_ssl`. The staging-only environment,
+JWT signing-secret rotation and Railway PostgreSQL password regeneration were
+verified with a disposable registration, login, authenticated `/auth/me`,
+account-deletion and deleted-account rejection flow. The test account was
+deleted and the staging `users` table was empty afterward. No Flutter source
+changed, and `flutter analyze` was not run locally for Day 70.
+
 ### Docker development environment
 
 Day 42 adds a reproducible local Docker Compose environment containing the
@@ -606,8 +623,12 @@ discarded.
   audio.
 - Helmet adds API-oriented security response headers and removes
   `X-Powered-By`. Content Security Policy remains disabled because the service
-  returns JSON rather than web pages, and HSTS remains disabled until HTTPS is
-  configured and verified.
+  returns JSON rather than web pages. HSTS remains disabled for local HTTP and
+  is enabled explicitly in verified Railway staging with
+  `ENABLE_HSTS=true`.
+- PostgreSQL TLS remains disabled for local development and is required in
+  Railway staging with `DB_SSL_MODE=require`. The health endpoint obtains the
+  active connection's TLS state from `pg_stat_ssl`.
 - JSON request bodies are limited to 32 KB. Malformed JSON, oversized bodies
   and unknown routes receive stable JSON 400, 413 and 404 responses.
 - Sensitive authentication routes allow 40 requests per IP per 15 minutes;
@@ -631,10 +652,14 @@ discarded.
   per-account send limits. Day 68 adds process-local, in-memory IP limits around
   registration, login, account deletion, verification, recovery and session
   token routes. These counters reset when Express restarts and are not shared
-  across multiple API instances. Proxy trust and a distributed limiter must be
-  decided from the actual staging topology before production use.
+  across multiple API instances. Express proxy trust remains disabled because
+  the trusted client-address contract has not been established; a verified
+  proxy configuration and distributed limiter are still required before
+  production use.
 - Server records are shown in an experimental test interface.
-- The backend is intended for local development and is not deployed.
+- The experimental backend is deployed only to a disposable Railway staging
+  environment. No production environment, production data or Flutter cloud
+  synchronization exists.
 - Local SQLite records and PostgreSQL test records are not synchronized.
 - V1 uses a fixed set of tags; custom tag management is not implemented yet.
 
@@ -906,7 +931,12 @@ discarded.
   Railway staging in Singapore; migrations, health endpoints and the disposable
   authentication lifecycle were verified. See
   `docs/product_decisions/002_staging.md`.
-- [ ] Day 70: verify HTTPS, database TLS, environment isolation and secret rotation
+- [x] Day 70: verified public HTTPS and HSTS, enforced and observed PostgreSQL
+  TLS, confirmed the project is staging-only, rotated the JWT signing secret
+  and PostgreSQL password, and re-verified the disposable authentication
+  lifecycle. The backend passed 39 local unit tests, 34 local integration tests
+  and all four GitHub Actions jobs. See
+  `docs/product_decisions/002_staging.md`.
 - [ ] Day 71: productionize health checks, request IDs, error monitoring and
   privacy-safe logging
 - [ ] Day 72: configure PostgreSQL backups and complete a real restore exercise
