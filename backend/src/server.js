@@ -62,6 +62,8 @@ const {
 const app = express();
 
 const port = process.env.PORT || 3000;
+const isHstsEnabled =
+    process.env.ENABLE_HSTS === 'true';
 
 const verificationMailer =
     process.env.EMAIL_DELIVERY_MODE === 'fake'
@@ -100,7 +102,13 @@ const sessionTokenLimiter = rateLimit({
 app.use(
     helmet({
         contentSecurityPolicy: false,
-        strictTransportSecurity: false,
+        strictTransportSecurity:
+            isHstsEnabled
+                ? {
+                    maxAge: 31536000,
+                    includeSubDomains: false,
+                }
+                : false,
     }),
 );
 
@@ -633,12 +641,24 @@ app.get(
 app.get('/database-health', async (request, response) => {
     try {
         const result = await pool.query(
-            'SELECT NOW() AS current_time',
+            `
+                SELECT
+                    NOW() AS current_time,
+                    COALESCE(
+                        (
+                            SELECT ssl
+                            FROM pg_stat_ssl
+                            WHERE pid = pg_backend_pid()
+                        ),
+                        false
+                    ) AS tls_enabled
+            `,
         );
 
         response.json({
             status: 'ok',
             databaseTime: result.rows[0].current_time,
+            tlsEnabled: result.rows[0].tls_enabled,
         });
     } catch (error) {
         console.error('Database connection failed:', error.message);
