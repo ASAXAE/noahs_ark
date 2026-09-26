@@ -73,6 +73,27 @@ test('sets API security headers', async () => {
     );
 });
 
+test('adds a unique request ID to every response', async () => {
+    const firstResponse = await fetch(
+        `${baseUrl}/health`,
+    );
+    const secondResponse = await fetch(
+        `${baseUrl}/unknown-route`,
+    );
+
+    const firstRequestId =
+        firstResponse.headers.get('x-request-id');
+    const secondRequestId =
+        secondResponse.headers.get('x-request-id');
+
+    const uuidV4Pattern =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    assert.match(firstRequestId, uuidV4Pattern);
+    assert.match(secondRequestId, uuidV4Pattern);
+    assert.notEqual(firstRequestId, secondRequestId);
+});
+
 test('returns a JSON 404 response', async () => {
     const response = await fetch(
         `${baseUrl}/unknown-route`,

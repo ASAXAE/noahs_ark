@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "db:migrate": "node src/migrate.js",
-    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js test/api_hardening.test.js test/database_config.test.js test/hsts.test.js",
-    "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js integration/email_verification.integration.test.js integration/refresh_token.integration.test.js integration/refresh_token_api.integration.test.js integration/password_reset.integration.test.js integration/password_reset_request.integration.test.js integration/password_reset_api.integration.test.js integration/account_deletion.integration.test.js integration/account_deletion_api.integration.test.js"
+    "test": "node --test test/thought_validation.test.js test/auth_validation.test.js test/migration_runner.test.js test/api_hardening.test.js test/database_config.test.js test/hsts.test.js test/privacy_logger.test.js test/request_logging.test.js test/readiness.test.js test/error_monitoring.test.js",
+    "test:integration": "node --test integration/thought_api.integration.test.js integration/auth_api.integration.test.js integration/email_verification.integration.test.js integration/refresh_token.integration.test.js integration/refresh_token_api.integration.test.js integration/password_reset.integration.test.js integration/password_reset_request.integration.test.js integration/password_reset_api.integration.test.js integration/account_deletion.integration.test.js integration/account_deletion_api.integration.test.js integration/health_api.integration.test.js"
   },
   "keywords": [],
   "author": "",

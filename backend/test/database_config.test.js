@@ -26,6 +26,7 @@ test('disables database TLS by default', () => {
             user: 'postgres',
             password: 'test-password',
             ssl: false,
+            connectionTimeoutMillis: 3000,
         },
     );
 });
@@ -48,5 +49,33 @@ test('rejects an unsupported database TLS mode', () => {
             DB_SSL_MODE: 'unexpected',
         }),
         /DB_SSL_MODE must be "disable" or "require"/,
+    );
+});
+
+test('validates the database connection timeout', () => {
+    const config = createDatabaseConfig({
+        ...baseEnvironment,
+        DB_CONNECTION_TIMEOUT_MS: '5000',
+    });
+
+    assert.equal(
+        config.connectionTimeoutMillis,
+        5000,
+    );
+
+    assert.throws(
+        () => createDatabaseConfig({
+            ...baseEnvironment,
+            DB_CONNECTION_TIMEOUT_MS: '0',
+        }),
+        /DB_CONNECTION_TIMEOUT_MS must be a positive integer/,
+    );
+
+    assert.throws(
+        () => createDatabaseConfig({
+            ...baseEnvironment,
+            DB_CONNECTION_TIMEOUT_MS: 'not-a-number',
+        }),
+        /DB_CONNECTION_TIMEOUT_MS must be a positive integer/,
     );
 });

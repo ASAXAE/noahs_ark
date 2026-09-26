@@ -232,7 +232,7 @@ assets/
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/health` | Check whether Express is running |
-| `GET` | `/database-health` | Check the PostgreSQL connection |
+| `GET` | `/readyz` | Check whether Express and PostgreSQL are ready without exposing database details |
 | `POST` | `/auth/register` | Register a backend test user; request initial verification when fake delivery is enabled |
 | `POST` | `/auth/login` | Verify credentials and issue an access/refresh token pair |
 | `POST` | `/auth/token/refresh` | Rotate a valid refresh token and issue a replacement token pair |
@@ -565,7 +565,7 @@ In a second terminal, verify both services:
 ```powershell
 docker compose --env-file .env.docker ps
 Invoke-RestMethod http://localhost:3000/health
-Invoke-RestMethod http://localhost:3000/database-health
+Invoke-RestMethod http://localhost:3000/readyz
 ```
 
 Host-side integration tests must use the same Docker database credentials and
@@ -752,8 +752,9 @@ discarded.
 - [x] Day 55: extend CI with PostgreSQL, migrations, two-account integration tests
   and a Docker build. CI now runs four independent jobs for Flutter checks,
   backend unit tests, PostgreSQL integration and the backend Docker build. The
-  integration job starts PostgreSQL 17, applies the numbered migrations, waits
-  for `/database-health` and runs self-contained two-account API tests. Local
+  integration job starts PostgreSQL 17, applies the numbered migrations and
+  runs self-contained two-account API tests. Day 71 later replaced its public
+  `/database-health` startup wait with the minimal `/readyz` endpoint. Local
   verification passed all 22 backend unit tests, all 7 integration tests, the
   migration idempotence check and the Docker build. GitHub Actions
   [run #5](https://github.com/ASAXAE/noahs_ark/actions/runs/34436677934)
@@ -937,18 +938,46 @@ discarded.
   lifecycle. The backend passed 39 local unit tests, 34 local integration tests
   and all four GitHub Actions jobs. See
   `docs/product_decisions/002_staging.md`.
-- [ ] Day 71: productionize health checks, request IDs, error monitoring and
-  privacy-safe logging
-- [ ] Day 72: configure PostgreSQL backups and complete a real restore exercise
-- [ ] Day 73: finish the privacy policy, retention periods, third-party-service
+- [x] Day 71: productionized backend observability and health checks. Every
+  response now carries a generated `X-Request-ID`; optional one-line JSON
+  request logging records only allowlisted request metadata, while handled
+  failures, operational delivery failures and refresh-token reuse emit
+  structured error or security events without request bodies, credentials or
+  tokens. `GET /health` is a database-independent liveness check and
+  `GET /readyz` performs a bounded PostgreSQL readiness query; both disable
+  caching, CI now waits on `/readyz`, and the detail-revealing public
+  `/database-health` endpoint has been retired. Local verification passed all
+  49 backend unit tests and all 37 backend integration tests.
+- [ ] Day 72: incrementally modularize the Express backend without changing
+  existing API contracts. Keep `server.js` as the process entry point, move
+  Express composition into `app.js`, group HTTP endpoints under `routes/`, and
+  extract controllers, services, repositories and shared middleware by
+  responsibility. Run the backend unit and PostgreSQL integration suites after
+  each extraction instead of rewriting the server in one step. Target shape:
+
+  ```text
+  backend/src/
+  |-- server.js
+  |-- app.js
+  |-- routes/
+  |   |-- auth_routes.js
+  |   |-- thought_routes.js
+  |   `-- health_routes.js
+  |-- controllers/
+  |-- services/
+  |-- repositories/
+  `-- middleware/
+  ```
+- [ ] Day 73: configure PostgreSQL backups and complete a real restore exercise
+- [ ] Day 74: finish the privacy policy, retention periods, third-party-service
   disclosures and recording/transcription consent rules
-- [ ] Day 74: complete full Android physical-device regression
-- [ ] Day 75: prepare versioning, changelog, signed APK/AAB and internal-test notes
-- [ ] Day 76: pass the release gate before creating
+- [ ] Day 75: complete full Android physical-device regression
+- [ ] Day 76: prepare versioning, changelog, signed APK/AAB and internal-test notes
+- [ ] Day 77: pass the release gate before creating
   `v0.3.0-cloud-foundation`
-- [ ] Day 77: write an optional synchronization design document without
+- [ ] Day 78: write an optional synchronization design document without
   implementing uploads
-- [ ] Day 78–84: sequentially add UUID and sync metadata, an explicit sync switch,
+- [ ] Day 79–85: sequentially add UUID and sync metadata, an explicit sync switch,
   idempotent synchronization, cursor-based upload/download, an offline queue,
   conflict and deletion propagation, then dual-device and staged-rollout testing.
   Create `v0.4.0-sync-beta` only after every check passes
@@ -990,7 +1019,7 @@ must remain independent of the currently visible page.
   a clear policy for replacing existing text.
 - Future input direction: the user envisions two Flash Thought capture methods:
   audio recording and brain-computer interface (BCI / 脑机接口) device input.
-  After Day 84, schedule a separate feasibility milestone before implementation:
+  After Day 85, schedule a separate feasibility milestone before implementation:
   identify a candidate device and available SDK/protocol, verify its actual
   output (such as signals, events or commands), mobile compatibility, access
   requirements and privacy constraints, and demonstrate a minimal input flow.
@@ -1112,7 +1141,7 @@ migration runner with automated and local-database verification. Day 55 next
 extends CI with PostgreSQL, migrations, integration tests and a Docker build.
 Day 56–59 adds background recording and Day 60–61 adds capture-entry and playback
 UX work. Account work starts on Day 62, the cloud-foundation release gate is Day
-76, and optional sync is Day 77–84. Future unchecked tasks remain plans.
+77, and optional sync is Day 78–85. Future unchecked tasks remain plans.
 
 ### Product backlog
 
@@ -1120,7 +1149,7 @@ UX work. Account work starts on Day 62, the cloud-foundation release gate is Day
 - Publish the first internally tested Android release artifact
 - Add custom tag management in V1.1
 - Design an opt-in, privacy-preserving sync model
-- Research BCI device input after Day 84; select hardware and validate actual
+- Research BCI device input after Day 85; select hardware and validate actual
   output and privacy boundaries before scheduling a Flash Thought integration
 - Evaluate Live Activities / Dynamic Island and Android vendor status capsules
   after the core recording lifecycle and notification controls are reliable

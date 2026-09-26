@@ -11,6 +11,24 @@ require('dotenv').config();
 const pool = require('./database');
 
 const {
+    createErrorReporter,
+    createOperationalErrorReporter,
+    createSecurityEventReporter,
+} = require('./error_monitoring');
+
+const {
+    checkDatabaseReadiness,
+} = require('./readiness');
+
+const {
+    attachRequestId,
+} = require('./request_context');
+
+const {
+    createRequestLogger,
+} = require('./request_logging');
+
+const {
     createAccessToken,
 } = require('./auth_token');
 
@@ -61,9 +79,19 @@ const {
 
 const app = express();
 
+const reportRequestError =
+    createErrorReporter();
+const reportOperationalError =
+    createOperationalErrorReporter();
+const reportSecurityEvent =
+    createSecurityEventReporter();
+
 const port = process.env.PORT || 3000;
 const isHstsEnabled =
     process.env.ENABLE_HSTS === 'true';
+
+const isRequestLoggingEnabled =
+    process.env.ENABLE_REQUEST_LOGGING === 'true';
 
 const verificationMailer =
     process.env.EMAIL_DELIVERY_MODE === 'fake'
@@ -98,6 +126,12 @@ const sessionTokenLimiter = rateLimit({
             'Too many session requests; try again later',
     },
 });
+
+app.use(attachRequestId);
+
+if (isRequestLoggingEnabled) {
+    app.use(createRequestLogger());
+}
 
 app.use(
     helmet({
@@ -140,9 +174,28 @@ app.use(
 );
 
 app.get('/health', (request, response) => {
-    response.json({
+    response.set('Cache-Control', 'no-store');
+
+    return response.json({
         status: 'ok',
         message: "Noah's Ark API is running",
+    });
+});
+
+app.get('/readyz', async (request, response) => {
+    const isReady =
+        await checkDatabaseReadiness(pool);
+
+    response.set('Cache-Control', 'no-store');
+
+    if (!isReady) {
+        return response.status(503).json({
+            status: 'unavailable',
+        });
+    }
+
+    return response.json({
+        status: 'ready',
     });
 });
 
@@ -197,7 +250,11 @@ app.post('/auth/register', async (request, response) => {
                     verificationMailer,
                 );
             } catch {
-                console.error('Failed to request initial verification email');
+                reportOperationalError(
+                    request,
+                    'initial_verification_delivery_failed',
+                    201,
+                );
             }
         }
 
@@ -209,7 +266,10 @@ app.post('/auth/register', async (request, response) => {
             });
         }
 
-        console.error('Failed to register user:', error.message);
+        reportRequestError(
+            request,
+            'registration_failed',
+        );
 
         return response.status(500).json({
             message: 'Failed to register user',
@@ -289,8 +349,11 @@ app.post('/auth/login', async (request, response) => {
                 createdAt: user.createdAt,
             },
         });
-    } catch (error) {
-        console.error('Failed to log in user:', error.message);
+    } catch {
+        reportRequestError(
+            request,
+            'login_failed',
+        );
 
         return response.status(500).json({
             message: 'Failed to log in user',
@@ -309,8 +372,9 @@ app.post('/auth/token/refresh', async (request, response) => {
 
         if (result.status !== 'rotated') {
             if (result.status === 'reused') {
-                console.warn(
-                    'Refresh token reuse detected; token family revoked',
+                reportSecurityEvent(
+                    request,
+                    'refresh_token_reuse_detected',
                 );
             }
 
@@ -327,10 +391,10 @@ app.post('/auth/token/refresh', async (request, response) => {
             refreshToken: result.refreshToken,
             refreshTokenExpiresAt: result.expiresAt,
         });
-    } catch (error) {
-        console.error(
-            'Failed to refresh session:',
-            error.message,
+    } catch {
+        reportRequestError(
+            request,
+            'session_refresh_failed',
         );
 
         return response.status(500).json({
@@ -349,10 +413,10 @@ app.post('/auth/logout', async (request, response) => {
         );
 
         return response.status(204).send();
-    } catch (error) {
-        console.error(
-            'Failed to revoke session:',
-            error.message,
+    } catch {
+        reportRequestError(
+            request,
+            'session_revocation_failed',
         );
 
         return response.status(500).json({
@@ -389,10 +453,10 @@ app.get(
             }
 
             return response.status(200).json(user);
-        } catch (error) {
-            console.error(
-                'Failed to fetch authenticated user:',
-                error.message,
+        } catch {
+            reportRequestError(
+                request,
+                'authenticated_user_fetch_failed',
             );
 
             return response.status(500).json({
@@ -433,10 +497,10 @@ app.delete(
             }
 
             return response.status(204).send();
-        } catch (error) {
-            console.error(
-                'Failed to delete account:',
-                error.message,
+        } catch {
+            reportRequestError(
+                request,
+                'account_deletion_failed',
             );
 
             return response.status(500).json({
@@ -473,7 +537,12 @@ app.post(
                 message: 'Verification request accepted',
             });
         } catch {
-            console.error('Failed to request verification email');
+            reportRequestError(
+                request,
+                'verification_request_failed',
+                503,
+            );
+
             return response.status(503).json({
                 message: 'Verification email is temporarily unavailable',
             });
@@ -502,7 +571,11 @@ app.post(
                 verified: true,
             });
         } catch {
-            console.error('Failed to confirm email verification');
+            reportRequestError(
+                request,
+                'verification_confirmation_failed',
+            );
+
             return response.status(500).json({
                 message: 'Failed to confirm email verification',
             });
@@ -538,8 +611,10 @@ app.post(
                 passwordResetMailer,
             );
         } catch {
-            console.error(
-                'Failed to request password reset email',
+            reportOperationalError(
+                request,
+                'password_reset_delivery_failed',
+                202,
             );
         }
 
@@ -592,10 +667,10 @@ app.post(
             return response.status(200).json({
                 reset: true,
             });
-        } catch (error) {
-            console.error(
-                'Failed to reset password:',
-                error.message,
+        } catch {
+            reportRequestError(
+                request,
+                'password_reset_failed',
             );
 
             return response.status(500).json({
@@ -628,8 +703,11 @@ app.get(
         );
 
         response.json(result.rows);
-    } catch (error) {
-        console.error('Failed to fetch thoughts:', error.message);
+    } catch {
+        reportRequestError(
+            request,
+            'thought_list_failed',
+        );
 
         response.status(500).json({
             message: 'Failed to fetch thoughts',
@@ -637,38 +715,6 @@ app.get(
     }
     },
 );
-
-app.get('/database-health', async (request, response) => {
-    try {
-        const result = await pool.query(
-            `
-                SELECT
-                    NOW() AS current_time,
-                    COALESCE(
-                        (
-                            SELECT ssl
-                            FROM pg_stat_ssl
-                            WHERE pid = pg_backend_pid()
-                        ),
-                        false
-                    ) AS tls_enabled
-            `,
-        );
-
-        response.json({
-            status: 'ok',
-            databaseTime: result.rows[0].current_time,
-            tlsEnabled: result.rows[0].tls_enabled,
-        });
-    } catch (error) {
-        console.error('Database connection failed:', error.message);
-
-        response.status(500).json({
-            status: 'error',
-            message: 'Database connection failed',
-        });
-    }
-});
 
 app.post(
     '/thoughts',
@@ -715,8 +761,11 @@ app.post(
         );
 
         response.status(201).json(result.rows[0]);
-    } catch (error) {
-        console.error('Failed to create thought:', error.message);
+    } catch {
+        reportRequestError(
+            request,
+            'thought_creation_failed',
+        );
 
         response.status(500).json({
             message: 'Failed to create thought',
@@ -801,8 +850,11 @@ app.patch(
         }
 
         return response.json(result.rows[0]);
-    } catch (error) {
-        console.error('Failed to update thought:', error);
+    } catch {
+        reportRequestError(
+            request,
+            'thought_update_failed',
+        );
 
         return response.status(500).json({
             message: 'Failed to update thought',
@@ -844,8 +896,11 @@ app.delete(
         }
 
         return response.status(204).send();
-    } catch (error) {
-        console.error('Failed to delete thought:', error.message);
+    } catch {
+        reportRequestError(
+            request,
+            'thought_deletion_failed',
+        );
 
         return response.status(500).json({
             message: 'Failed to delete thought',
@@ -877,9 +932,9 @@ app.use((error, request, response, next) => {
         });
     }
 
-    console.error(
-        'Unhandled request error:',
-        error.message,
+    reportRequestError(
+        request,
+        'unhandled_request_error',
     );
 
     return response.status(500).json({

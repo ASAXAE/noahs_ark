@@ -98,7 +98,7 @@ jobs:
           --retry 10
           --retry-delay 2
           --retry-connrefused
-          http://127.0.0.1:3000/database-health
+          http://127.0.0.1:3000/readyz
 
       - name: Run integration tests
         run: npm run test:integration
