@@ -7,7 +7,7 @@ const {
     validatePasswordResetRequestInput,
     validatePasswordResetConfirmationInput,
     validateAccountDeletionInput,
-} = require('../src/auth_validation');
+} = require('../src/validators/auth_validation');
 
 describe('validateRegistrationInput', () => {
     test('accepts valid registration data and normalizes it', () => {

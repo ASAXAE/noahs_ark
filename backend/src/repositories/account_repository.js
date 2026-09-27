@@ -73,6 +73,19 @@ async function deleteAccountWithPassword(
     }
 }
 
+function createAccountRepository(database) {
+    return {
+        deleteWithPassword(userId, password) {
+            return deleteAccountWithPassword(
+                database,
+                userId,
+                password,
+            );
+        },
+    };
+}
+
 module.exports = {
+    createAccountRepository,
     deleteAccountWithPassword,
 };

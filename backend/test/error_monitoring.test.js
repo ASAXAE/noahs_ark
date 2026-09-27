@@ -8,7 +8,7 @@ const {
     createErrorReporter,
     createOperationalErrorReporter,
     createSecurityEventReporter,
-} = require('../src/error_monitoring');
+} = require('../src/observability/error_monitoring');
 
 test('reports a request error without sensitive request data', () => {
     const calls = [];

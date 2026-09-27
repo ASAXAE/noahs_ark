@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 const { after, test } = require('node:test');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const baseUrl =
     process.env.API_BASE_URL ||

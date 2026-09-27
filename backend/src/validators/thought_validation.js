@@ -1,3 +1,4 @@
+// Pure Thought input validation shared by the service layer.
 function validateThoughtInput(body = {}) {
     const title =
         typeof body.title === 'string'

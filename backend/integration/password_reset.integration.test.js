@@ -8,17 +8,17 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const {
     issuePasswordResetToken,
     resetPasswordWithToken,
-} = require('../src/password_reset');
+} = require('../src/repositories/password_reset_repository');
 
 const {
     issueRefreshToken,
     rotateRefreshToken,
-} = require('../src/refresh_token');
+} = require('../src/repositories/refresh_token_repository');
 
 const originalPassword = 'OriginalPassword123';
 const previousTokenLifetime =

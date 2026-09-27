@@ -4,13 +4,13 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { after, test } = require('node:test');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const {
     issueRefreshToken,
     rotateRefreshToken,
     revokeRefreshToken,
-} = require('../src/refresh_token');
+} = require('../src/repositories/refresh_token_repository');
 
 process.env.REFRESH_TOKEN_TTL_DAYS = '30';
 

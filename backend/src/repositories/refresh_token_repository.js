@@ -306,7 +306,30 @@ async function revokeRefreshToken(pool, rawToken) {
     }
 }
 
+function createRefreshTokenRepository(database) {
+    return {
+        issue(userId) {
+            return issueRefreshToken(database, userId);
+        },
+
+        rotate(refreshToken) {
+            return rotateRefreshToken(
+                database,
+                refreshToken,
+            );
+        },
+
+        revoke(refreshToken) {
+            return revokeRefreshToken(
+                database,
+                refreshToken,
+            );
+        },
+    };
+}
+
 module.exports = {
+    createRefreshTokenRepository,
     issueRefreshToken,
     rotateRefreshToken,
     revokeRefreshToken,

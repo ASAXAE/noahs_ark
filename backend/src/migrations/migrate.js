@@ -2,7 +2,7 @@ const path = require('node:path');
 
 require('dotenv').config();
 
-const pool = require('./database');
+const pool = require('../database/pool');
 const { runMigrations } = require('./migration_runner');
 
 async function migrate() {
@@ -11,7 +11,12 @@ async function migrate() {
     try {
         client = await pool.connect();
 
-        const migrationsDirectory = path.join(__dirname, '..', 'sql');
+        const migrationsDirectory = path.join(
+            __dirname,
+            '..',
+            '..',
+            'sql',
+        );
         const appliedMigrations = await runMigrations(
             client,
             migrationsDirectory,

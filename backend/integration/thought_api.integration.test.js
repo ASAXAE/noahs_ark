@@ -6,8 +6,8 @@ require("dotenv").config({
   quiet: true,
 });
 
-const { createAccessToken } = require("../src/auth_token");
-const pool = require("../src/database");
+const { createAccessToken } = require("../src/services/auth_token_service");
+const pool = require("../src/database/pool");
 
 const baseUrl = process.env.API_BASE_URL || "http://127.0.0.1:3000";
 

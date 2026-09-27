@@ -1,3 +1,4 @@
+// Pure request-value validation with no HTTP or database dependencies.
 function validateRegistrationInput(body = {}) {
     const input =
         body !== null && typeof body === 'object'

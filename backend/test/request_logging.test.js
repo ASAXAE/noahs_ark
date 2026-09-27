@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 
 const {
     createRequestLogger,
-} = require('../src/request_logging');
+} = require('../src/middleware/request_logging');
 
 test('logs a privacy-safe completed request', () => {
     const calls = [];

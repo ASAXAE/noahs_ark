@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 
 const {
     createDatabaseConfig,
-} = require('../src/database_config');
+} = require('../src/config/database_config');
 
 const baseEnvironment = {
     DB_HOST: 'localhost',

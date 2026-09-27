@@ -5,8 +5,21 @@ const {
 const assert = require('node:assert/strict');
 
 const {
-    checkDatabaseReadiness,
-} = require('../src/readiness');
+    createHealthRepository,
+} = require('../src/repositories/health_repository');
+const {
+    createHealthService,
+} = require('../src/services/health_service');
+
+function createReadinessCheck(database) {
+    const healthRepository =
+        createHealthRepository(database);
+    const healthService = createHealthService({
+        healthRepository,
+    });
+
+    return () => healthService.isReady();
+}
 
 test('reports ready after a bounded database query', async () => {
     let receivedQuery;
@@ -26,7 +39,7 @@ test('reports ready after a bounded database query', async () => {
     };
 
     const isReady =
-        await checkDatabaseReadiness(database);
+        await createReadinessCheck(database)();
 
     assert.equal(isReady, true);
     assert.deepEqual(receivedQuery, {
@@ -45,7 +58,7 @@ test('reports unavailable without exposing the database error', async () => {
     };
 
     const isReady =
-        await checkDatabaseReadiness(database);
+        await createReadinessCheck(database)();
 
     assert.equal(isReady, false);
 });

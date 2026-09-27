@@ -8,11 +8,11 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const {
     issuePasswordResetToken,
-} = require('../src/password_reset');
+} = require('../src/repositories/password_reset_repository');
 
 const baseUrl =
     process.env.API_BASE_URL ||

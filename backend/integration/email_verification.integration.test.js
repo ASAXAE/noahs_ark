@@ -4,22 +4,22 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { after, test } = require('node:test');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 const {
     issueEmailVerificationToken,
     consumeEmailVerificationToken,
-} = require('../src/email_verification');
+} = require('../src/repositories/verification_repository');
 
 const {
     issueRateLimitedVerificationToken,
-} = require('../src/verification_request');
+} = require('../src/repositories/verification_repository');
 
 const {
     createFakeVerificationMailer,
-} = require('../src/verification_mailer');
+} = require('../src/mailers/verification_mailer');
 const {
     requestVerificationEmail,
-} = require('../src/verification_delivery');
+} = require('../src/services/verification_service');
 
 after(async () => {
     await pool.end();

@@ -1,6 +1,6 @@
 const {
     writeLog,
-} = require('./privacy_logger');
+} = require('../observability/privacy_logger');
 
 function createRequestLogger({
     log = writeLog,

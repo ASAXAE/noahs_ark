@@ -8,15 +8,15 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const {
     createFakePasswordResetMailer,
-} = require('../src/password_reset_mailer');
+} = require('../src/mailers/password_reset_mailer');
 
 const {
     requestPasswordResetEmail,
-} = require('../src/password_reset_delivery');
+} = require('../src/services/password_reset_service');
 
 after(async () => {
     await pool.end();

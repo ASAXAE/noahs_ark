@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     validateThoughtInput,
-} = require('../src/thought_validation');
+} = require('../src/validators/thought_validation');
 
 test('accepts valid thought data and trims title and tag', () => {
     const result = validateThoughtInput({

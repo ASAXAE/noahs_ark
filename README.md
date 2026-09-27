@@ -198,23 +198,19 @@ backend/
 │   ├── 005_add_refresh_tokens.sql
 │   └── 006_add_password_reset_tokens.sql
 ├── src/
-│   ├── auth_middleware.js
-│   ├── auth_token.js
-│   ├── auth_validation.js
-│   ├── database.js
-│   ├── email_verification.js
-│   ├── migrate.js
-│   ├── migration_runner.js
-│   ├── password_reset.js
-│   ├── password_reset_delivery.js
-│   ├── password_reset_mailer.js
-│   ├── password_reset_request.js
-│   ├── refresh_token.js
-│   ├── server.js
-│   ├── thought_validation.js
-│   ├── verification_delivery.js
-│   ├── verification_mailer.js
-│   └── verification_request.js
+│   ├── config/          Database configuration
+│   ├── controllers/     HTTP request and response handling
+│   ├── database/        PostgreSQL pool construction
+│   ├── mailers/         Email-delivery adapters
+│   ├── middleware/      Authentication, limits, logging and errors
+│   ├── migrations/      Migration CLI and checksum-protected runner
+│   ├── observability/   Privacy-safe logging and error reporting
+│   ├── repositories/    PostgreSQL queries and transactions
+│   ├── routes/          Express endpoint declarations
+│   ├── services/        Authentication and application workflows
+│   ├── validators/      Pure request-value validation
+│   ├── app.js           Express composition
+│   └── server.js        Process entry point
 └── test/
     ├── auth_validation.test.js
     ├── migration_runner.test.js
@@ -492,10 +488,10 @@ Backend:
 ```bash
 cd backend
 node --check src/server.js
-node --check src/database.js
-node --check src/auth_token.js
-node --check src/auth_middleware.js
-node --check src/refresh_token.js
+node --check src/app.js
+node --check src/database/pool.js
+node --check src/services/auth_token_service.js
+node --check src/repositories/refresh_token_repository.js
 npm test
 npm run test:integration
 ```
@@ -948,26 +944,18 @@ discarded.
   caching, CI now waits on `/readyz`, and the detail-revealing public
   `/database-health` endpoint has been retired. Local verification passed all
   49 backend unit tests and all 37 backend integration tests.
-- [ ] Day 72: incrementally modularize the Express backend without changing
-  existing API contracts. Keep `server.js` as the process entry point, move
-  Express composition into `app.js`, group HTTP endpoints under `routes/`, and
-  extract controllers, services, repositories and shared middleware by
-  responsibility. Run the backend unit and PostgreSQL integration suites after
-  each extraction instead of rewriting the server in one step. Target shape:
-
-  ```text
-  backend/src/
-  |-- server.js
-  |-- app.js
-  |-- routes/
-  |   |-- auth_routes.js
-  |   |-- thought_routes.js
-  |   `-- health_routes.js
-  |-- controllers/
-  |-- services/
-  |-- repositories/
-  `-- middleware/
-  ```
+- [x] Day 72: modularized the Express backend without changing its public API
+  contracts. `server.js` is now the small process entry point and `app.js`
+  composes dependencies, middleware and the Health, Auth and Thought routers.
+  HTTP handling, workflows and PostgreSQL access are separated into routes,
+  controllers, services and repositories; configuration, database-pool setup,
+  mailers, middleware, migrations, privacy-safe observability and validators
+  have dedicated directories. Only `app.js` and `server.js` remain directly
+  under `backend/src`, and `db:migrate` now uses the relocated migration entry
+  point. Full JavaScript syntax checks passed, the migration runner confirmed
+  the local database was already up to date, and all 49 backend unit tests plus
+  all 37 PostgreSQL integration tests passed. No Flutter source changed and
+  `flutter analyze` was not run for Day 72.
 - [ ] Day 73: configure PostgreSQL backups and complete a real restore exercise
 - [ ] Day 74: finish the privacy policy, retention periods, third-party-service
   disclosures and recording/transcription consent rules

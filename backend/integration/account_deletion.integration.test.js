@@ -5,24 +5,24 @@ const bcrypt = require('bcryptjs');
 const crypto = require('node:crypto');
 const { after, test } = require('node:test');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const {
     deleteAccountWithPassword,
-} = require('../src/account_deletion');
+} = require('../src/repositories/account_repository');
 
 const {
     issueEmailVerificationToken,
-} = require('../src/email_verification');
+} = require('../src/repositories/verification_repository');
 
 const {
     issueRefreshToken,
     rotateRefreshToken,
-} = require('../src/refresh_token');
+} = require('../src/repositories/refresh_token_repository');
 
 const {
     issuePasswordResetToken,
-} = require('../src/password_reset');
+} = require('../src/repositories/password_reset_repository');
 
 process.env.REFRESH_TOKEN_TTL_DAYS = '30';
 process.env.PASSWORD_RESET_TOKEN_TTL_MINUTES = '60';

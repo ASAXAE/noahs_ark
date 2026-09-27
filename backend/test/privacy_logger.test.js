@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const {
     createLogEntry,
     writeLog,
-} = require('../src/privacy_logger');
+} = require('../src/observability/privacy_logger');
 
 test('creates an allowlisted privacy-safe log entry', () => {
     const now =

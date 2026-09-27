@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-const pool = require('../src/database');
+const pool = require('../src/database/pool');
 
 const baseUrl =
     process.env.API_BASE_URL ||

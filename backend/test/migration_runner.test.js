@@ -12,7 +12,7 @@ const {
 const {
     loadMigrations,
     runMigrations,
-} = require('../src/migration_runner');
+} = require('../src/migrations/migration_runner');
 
 let migrationsDirectory;
 

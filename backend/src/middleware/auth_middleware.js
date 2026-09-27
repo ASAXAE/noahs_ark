@@ -1,6 +1,6 @@
 const {
     verifyAccessToken,
-} = require('./auth_token');
+} = require('../services/auth_token_service');
 
 function requireAuthentication(request, response, next) {
     const authorizationHeader =
@@ -42,7 +42,7 @@ function requireAuthentication(request, response, next) {
         };
 
         return next();
-    } catch (error) {
+    } catch {
         return response.status(401).json({
             message: 'Invalid or expired access token',
         });
