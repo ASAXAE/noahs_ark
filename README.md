@@ -197,6 +197,8 @@ backend/
 │   ├── 004_add_email_verification.sql
 │   ├── 005_add_refresh_tokens.sql
 │   └── 006_add_password_reset_tokens.sql
+├── scripts/
+│   └── postgres_backup.js  PostgreSQL backup and isolated restore drill
 ├── src/
 │   ├── config/          Database configuration
 │   ├── controllers/     HTTP request and response handling
@@ -540,6 +542,34 @@ account-deletion and deleted-account rejection flow. The test account was
 deleted and the staging `users` table was empty afterward. No Flutter source
 changed, and `flutter analyze` was not run locally for Day 70.
 
+### PostgreSQL backup and restore
+
+Day 73 adds custom-format PostgreSQL backups and an isolated restore exercise.
+From `backend`, run `npm.cmd run db:backup -- local`, then pass the printed
+archive path to `npm.cmd run db:restore:drill -- <archive-path>`. Archive files,
+SHA-256 manifests and successful restore reports stay in the ignored
+`.backups/postgres/` directory. Restores use only a newly created local drill
+database, verify row counts and hashes, schema, migrations, sequences and
+behavioral constraints, then remove that drill database.
+
+The exercise was repeated on 2026-10-01 with the current script. PostgreSQL
+18.3 restored 3 users, 6 Thoughts, 3 email-verification tokens, 6 refresh
+tokens and all 6 migrations; all checks passed. Backend unit tests passed
+54/54. The original local database was retained.
+
+The Railway Trial/Free account's Backups page requires Pro for new Volume
+Backups and PITR. The portable staging export and synthetic-data exercise passed
+on 2026-10-01 using `npm.cmd run db:backup:railway-drill` against only
+`noahs-ark-staging / staging`: the clean baseline and one-user/one-Thought
+archives both restored into fresh local databases. The synthetic account was
+deleted from staging, original row hashes were preserved, and no temporary SSH
+key remained. The CLI was logged out, and the user confirmed revoking its
+browser-side OAuth grant. No paid plan, public database proxy or automatic backup
+schedule was enabled. See
+[`docs/operations/postgres_backup.md`](docs/operations/postgres_backup.md) for
+the runbook, retention policy, verified evidence and remaining limitations. This
+database backup does not include local SQLite, JSON exports or audio.
+
 ### Docker development environment
 
 Day 42 adds a reproducible local Docker Compose environment containing the
@@ -623,8 +653,9 @@ discarded.
   is enabled explicitly in verified Railway staging with
   `ENABLE_HSTS=true`.
 - PostgreSQL TLS remains disabled for local development and is required in
-  Railway staging with `DB_SSL_MODE=require`. The health endpoint obtains the
-  active connection's TLS state from `pg_stat_ssl`.
+  Railway staging with `DB_SSL_MODE=require`. Public `/health` and `/readyz`
+  responses do not expose database connection details. The old
+  `/database-health` TLS diagnostic was retired in Day 71.
 - JSON request bodies are limited to 32 KB. Malformed JSON, oversized bodies
   and unknown routes receive stable JSON 400, 413 and 404 responses.
 - Sensitive authentication routes allow 40 requests per IP per 15 minutes;
@@ -956,7 +987,16 @@ discarded.
   the local database was already up to date, and all 49 backend unit tests plus
   all 37 PostgreSQL integration tests passed. No Flutter source changed and
   `flutter analyze` was not run for Day 72.
-- [ ] Day 73: configure PostgreSQL backups and complete a real restore exercise
+- [x] Day 73: local PostgreSQL logical-backup and isolated-restore tooling passed
+  a real PostgreSQL 18.3 recovery exercise, including all six application tables,
+  migration checksums, constraints, indexes, sequence state and behavioral probes.
+  Backend unit tests passed 54/54. Railway Trial/Free does not provide new Volume
+  Backups or PITR on this account. The staging baseline and synthetic-marker
+  archives both passed isolated local restore; the marker was removed and the
+  original staging rows were preserved. Temporary SSH keys were revoked, the
+  CLI was logged out, and the user confirmed revoking its browser-side OAuth
+  grant. See `docs/operations/postgres_backup.md`. Flutter source and
+  checks were outside this database-only task.
 - [ ] Day 74: finish the privacy policy, retention periods, third-party-service
   disclosures and recording/transcription consent rules
 - [ ] Day 75: complete full Android physical-device regression

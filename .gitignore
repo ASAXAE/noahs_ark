@@ -49,6 +49,10 @@ app.*.map.json
 .env.*
 !.env.example
 
+# Local Railway links and PostgreSQL backup artifacts
+.railway/
+.backups/
+
 backend/node_modules/
 
 application_materials/

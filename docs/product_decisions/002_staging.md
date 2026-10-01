@@ -24,8 +24,8 @@ Railway Free was selected because its trial does not require a credit card.
 - API: one GitHub service rooted at `/backend` and built from
   `backend/Dockerfile`
 - Database: one Railway PostgreSQL service in the same project and region
-- Migrations: Railway pre-deploy command `node src/migrate.js`
-- Health check: `/health`
+- Migrations: Railway pre-deploy command `npm run db:migrate` since Day 72
+- Health check: `/health`; PostgreSQL readiness: `/readyz`
 - Email delivery: disabled
 - Data: disposable test accounts and test Thoughts only
 - Flutter synchronization: not enabled
@@ -37,7 +37,10 @@ Railway Free was selected because its trial does not require a credit card.
 - After the trial, the Free plan provides USD 1 of monthly resource credit.
 - Do not add a payment method or upgrade a plan without explicit approval.
 - The staging services may stop when their available credit is exhausted.
-- Day 72 requires a separate backup and long-term database decision.
+- Trial/Free volumes must not be treated as permanent storage. Export a recovery
+  copy before credit expiry; provider volume retention is limited.
+- Day 73 records the backup decision. The local recovery exercise passed;
+  staging export and isolated recovery also passed on 2026-10-01.
 
 ## Verified deployment
 
@@ -118,3 +121,34 @@ Verified on 2026-09-25.
   tokens signed with the replacement secret.
 - Database-password rotation can briefly interrupt staging until the dependent
   API service is redeployed.
+
+## Day 73 backup decision and current evidence
+
+On 2026-09-28, the Postgres Backups page showed `No Backups` and required Pro
+for creating new Volume Backups or enabling PITR. No paid upgrade or public
+database proxy was selected. The backup method is a custom-format logical dump
+with an isolated local restore. Railway API status on 2026-09-29 confirmed the
+running API commit was `fc16bf7`, its pre-deploy command was
+`npm run db:migrate`, and the project had only the `staging` environment.
+
+The `/database-health` references above are historical Day 69/70 evidence. Day
+71 retired that endpoint; current database readiness is reported by `/readyz`.
+
+The local PostgreSQL 18.3 backup and restore passed all table row-count/hash,
+schema, sequence and migration checks. Archive, manifest and restore report are
+stored locally outside Git. On 2026-10-01 the user explicitly authorized a
+temporary SSH key and export only for `noahs-ark-staging / staging`; the required
+Railway CLI grant was limited to one workspace and this one project.
+After the VPN TUN-mode SSH obstruction was removed, a clean baseline and a
+synthetic-marker archive both passed isolated local restore. All six migration
+checksums matched the repository SQL after LF normalization; no applied
+migration file or history was changed. The one disposable user and Thought were
+removed from staging, original row hashes matched the baseline, and an
+independent key listing found no SSH keys registered. Archives, manifests and
+restore reports remain local, ignored by Git and not encrypted or offsite.
+The local Railway CLI was logged out and `railway whoami` returned
+`Unauthorized`; the user confirmed browser-side OAuth-grant revocation.
+
+Day 73 is closed. This logical-backup drill does not provide automatic
+Volume Backups, PITR, encryption, offsite storage or a production recovery plan.
+See [`../operations/postgres_backup.md`](../operations/postgres_backup.md).
