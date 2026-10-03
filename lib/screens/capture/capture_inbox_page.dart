@@ -587,6 +587,11 @@ class _CaptureInboxPageState extends State<CaptureInboxPage> {
               ),
             ],
             const SizedBox(height: 12),
+            const Text(
+              '转写在本机进行，录音和结果不会由应用上传。'
+              '首次使用需要联网下载模型，转写后仍保留原始录音。',
+            ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,

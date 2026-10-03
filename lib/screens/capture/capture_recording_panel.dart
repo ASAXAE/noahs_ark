@@ -31,6 +31,11 @@ class CaptureRecordingPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('录制闪念', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            const Text(
+              '录音保存在本机，不会由应用上传。开始后可在后台继续录制，'
+              '请点击“停止并保存”结束。转写需要另行选择。',
+            ),
             if (state.hasActiveRecording) ...[
               const SizedBox(height: 12),
               Text('已录制 $elapsedText'),

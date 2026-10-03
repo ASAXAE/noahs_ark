@@ -31,7 +31,8 @@ SQLite 中；Express + PostgreSQL 功能目前用于学习全栈开发和验证�
 - Local JSON backup export through the system share sheet
 - Validated JSON backup restore into SQLite
 - Merge-style restore that preserves existing data and skips duplicate records
-- Settings and in-app local-first privacy information
+- Settings and in-app privacy information covering local records, recording,
+  offline transcription, model downloads, account data, retention and deletion
 - Optional backend account registration and login without blocking local-only use
 - Registration form with password confirmation and client-side validation
 - Refined authentication UX with clear login/register switching, disabled form
@@ -609,8 +610,26 @@ discarded.
 
 ## Privacy and security
 
+- Day 74 documents the current development/internal-test policy in
+  [data and privacy](docs/product_decisions/003_privacy_and_retention.md).
+  The in-app page is available under My → Data and privacy. Public-release
+  operator/contact details, a hosted policy URL and production data-cleanup
+  processes remain release prerequisites.
 - Offline records are stored locally in SQLite by default.
 - Records are not automatically uploaded to the experimental backend.
+- Recording starts only after the user's action and necessary permission grants.
+  The recording panel explains background recording and how to stop it; saving
+  audio does not automatically start transcription.
+- Transcription runs locally with sherpa-onnx. A missing model requires explicit
+  confirmation before downloading from Hugging Face; the dialog discloses the
+  approximately 228 MB download, network metadata, traffic/storage use and
+  continuation of the selected local transcription. Cancellation or preparation
+  failure stops that selected task without deleting the audio.
+- Android disables automatic backup and supplies exclusion rules for all nine
+  app-data domains in legacy backups and Android 12+ cloud/device transfer.
+  Manufacturer tools, cross-platform transfer and old system copies still need
+  physical-device verification. This does not control user-exported files.
+- Local SQLite and exported JSON are not separately encrypted by the app.
 - Backup files are created only when the user explicitly exports them.
 - Restore validates backup format version and record count before writing.
 - Restore merges data without deleting existing records and skips matching
@@ -675,6 +694,10 @@ discarded.
   nothing externally.
 - Account deletion is implemented for local learning and testing, but there is
   no deployed deletion-request web flow or production retention-policy process.
+- The current internal-test privacy policy is implemented; physical-device
+  consent-flow/backup verification belongs to Day 75. Public publication and
+  production retention automation remain prerequisites for release, and have
+  not been completed by the current policy/UI changes.
 - Email verification and password reset retain their database-backed
   per-account send limits. Day 68 adds process-local, in-memory IP limits around
   registration, login, account deletion, verification, recovery and session
@@ -997,8 +1020,18 @@ discarded.
   CLI was logged out, and the user confirmed revoking its browser-side OAuth
   grant. See `docs/operations/postgres_backup.md`. Flutter source and
   checks were outside this database-only task.
-- [ ] Day 74: finish the privacy policy, retention periods, third-party-service
-  disclosures and recording/transcription consent rules
+- [x] Day 74: completed privacy disclosures for the current development and
+  internal-test version, including data purposes, retention/deletion boundaries,
+  third-party services and recording/transcription choices. Updated the in-app
+  privacy page and recording/transcription notices, made model-download consent
+  explicit and configured Android system-backup/device-transfer exclusions.
+  All 104 Flutter tests passed, modified Dart files passed the format check,
+  and a debug APK built successfully. Packaged-manifest/resource inspection
+  confirmed `allowBackup=false` plus all backup exclusions. `git diff --check`
+  passed; `flutter analyze` was not run. Day 75 retains physical-device validation;
+  public-policy publication and production cleanup remain release prerequisites.
+  See `docs/product_decisions/003_privacy_and_retention.md` for verification and
+  the remaining release checklist.
 - [ ] Day 75: complete full Android physical-device regression
 - [ ] Day 76: prepare versioning, changelog, signed APK/AAB and internal-test notes
 - [ ] Day 77: pass the release gate before creating

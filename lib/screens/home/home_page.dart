@@ -124,21 +124,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _prepareTranscriptionModel() async {
+  Future<bool> _prepareTranscriptionModel() async {
     if (_modelDownloadInProgress) {
-      return;
+      return false;
     }
 
     if (await _captureRepository.isTranscriptionModelInstalled()) {
-      if (!mounted) return;
+      if (!mounted) return false;
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('离线转写模型已经准备完成')));
-      return;
+      return true;
     }
 
-    if (!mounted) return;
+    if (!mounted) return false;
 
     final shouldDownload =
         await showDialog<bool>(
@@ -147,8 +147,9 @@ class _HomePageState extends State<HomePage> {
             return AlertDialog(
               title: const Text('下载离线转写模型？'),
               content: const Text(
-                '模型约 228 MB，只保存在当前设备。'
-                '原始录音不会上传到服务器。',
+                '本地转写需要先从 Hugging Face 下载模型，约 228 MB，'
+                '会使用网络流量和设备空间。下载服务可接收到 IP 地址及文件请求，'
+                '不会收到你的录音或记录。下载完成后，将在本机转写所选录音。',
               ),
               actions: [
                 TextButton(
@@ -157,7 +158,7 @@ class _HomePageState extends State<HomePage> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('下载'),
+                  child: const Text('下载并转写'),
                 ),
               ],
             );
@@ -166,7 +167,7 @@ class _HomePageState extends State<HomePage> {
         false;
 
     if (!shouldDownload || !mounted) {
-      return;
+      return false;
     }
 
     _modelDownloadInProgress = true;
@@ -192,15 +193,17 @@ class _HomePageState extends State<HomePage> {
     try {
       await _captureRepository.downloadTranscriptionModel();
 
-      if (!mounted) return;
+      if (!mounted) return false;
 
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(const SnackBar(content: Text('离线转写模型准备完成')));
+      return true;
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) return false;
 
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(const SnackBar(content: Text('模型下载失败，请检查网络后重试')));
+      return false;
     } finally {
       _modelDownloadInProgress = false;
     }
@@ -208,10 +211,11 @@ class _HomePageState extends State<HomePage> {
 
   Future<TranscriptionModelFiles?> _getTranscriptionModelFiles() async {
     if (!await _captureRepository.isTranscriptionModelInstalled()) {
-      await _prepareTranscriptionModel();
+      final prepared = await _prepareTranscriptionModel();
+      if (!prepared) return null;
     }
 
-    if (!await _captureRepository.isTranscriptionModelInstalled()) {
+    if (!mounted || !await _captureRepository.isTranscriptionModelInstalled()) {
       return null;
     }
 

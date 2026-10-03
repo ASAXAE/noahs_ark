@@ -94,9 +94,11 @@ class _AccountDeletionPageState extends State<AccountDeletionPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '服务器将永久删除你的云端账号、'
+                      '服务器将从当前数据库删除你的账号、'
                       '服务器测试记录、验证令牌、'
-                      '密码重置令牌和全部登录会话。',
+                      '密码重置令牌和全部登录会话。'
+                      '此前的服务器备份仍可能包含已删除的数据，'
+                      '会按备份保留规则另行清理。',
                       style: TextStyle(color: colors.onErrorContainer),
                     ),
                   ],
